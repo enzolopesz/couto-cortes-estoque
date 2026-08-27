@@ -75,3 +75,8 @@
 - [x] Adicionar teste do fluxo createStockMovement que rejeita saldo negativo antes de atualizar filamento ou inserir histórico
 - [x] Tornar os testes transacionais determinísticos com reset explícito do cache do banco
 - [x] Assegurar no teste negativo que update e insert não foram executados
+
+## Correção visual urgente — selects dark mode
+
+- [x] Substituir todos os selects nativos da área /estoque pelo componente Select customizado sem alterar lógica, banco ou rotas
+- [x] Garantir dropdowns, opções, foco, hover, placeholder e ícones sem fundo branco no módulo de estoque
