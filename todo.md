@@ -186,4 +186,4 @@
 - [x] Atualizar labels, validações, testes e documentação, com mudanças mínimas de compatibilidade nas telas dependentes
 - [x] Validar formulário em desktop/mobile e salvar checkpoint do ajuste
 - [x] Validar visualmente o modal Novo filamento em desktop e mobile nos estados kg, Quantidade/un e Comprimento/m, confirmando labels dinâmicos e ausência de overflow
-- [ ] Salvar novo checkpoint após concluir a validação visual completa deste ajuste
+- [x] Salvar novo checkpoint após concluir a validação visual completa deste ajuste
