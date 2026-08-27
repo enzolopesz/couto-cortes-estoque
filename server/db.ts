@@ -1,11 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { filaments, InsertFilament, InsertUser, users, User } from "../drizzle/schema";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -30,23 +29,17 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   }
 
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
+    const values: Partial<User> & { openId: string } = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
 
     const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
+    textFields.forEach(field => {
       const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
+      if (value !== undefined) {
+        values[field] = value ?? null;
+        updateSet[field] = value ?? null;
+      }
+    });
 
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
@@ -56,8 +49,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -68,7 +61,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values as typeof users.$inferInsert).onDuplicateKeyUpdate({
       set: updateSet,
     });
   } catch (error) {
@@ -85,8 +78,75 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+function requireDb() {
+  if (!_db) {
+    throw new Error("Database is not configured");
+  }
+  return _db;
+}
+
+export async function listFilamentsByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  return db
+    .select()
+    .from(filaments)
+    .where(eq(filaments.ownerId, ownerId))
+    .orderBy(desc(filaments.createdAt));
+}
+
+export async function getFilamentById(id: number, ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  const rows = await db
+    .select()
+    .from(filaments)
+    .where(and(eq(filaments.id, id), eq(filaments.ownerId, ownerId)))
+    .limit(1);
+  return rows[0];
+}
+
+export async function createFilament(data: Omit<InsertFilament, "id" | "createdAt" | "updatedAt">) {
+  const db = requireDb();
+  const result = await db.insert(filaments).values(data);
+  const insertedId = Number(result[0].insertId);
+  return getFilamentById(insertedId, data.ownerId);
+}
+
+export async function updateFilament(id: number, ownerId: number, data: Partial<Omit<InsertFilament, "id" | "ownerId" | "createdAt" | "updatedAt">>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  await db
+    .update(filaments)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(filaments.id, id), eq(filaments.ownerId, ownerId)));
+  return getFilamentById(id, ownerId);
+}
+
+export async function deleteFilament(id: number, ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  await db.delete(filaments).where(and(eq(filaments.id, id), eq(filaments.ownerId, ownerId)));
+}
+
+export async function getInventorySummary(ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  const [summary] = await db
+    .select({
+      filamentCount: count(filaments.id),
+      totalWeight: sql<number>`COALESCE(SUM(${filaments.currentWeight}), 0)`,
+      lowStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.currentWeight} <= ${filaments.minimumWeight} THEN 1 ELSE 0 END), 0)`,
+    })
+    .from(filaments)
+    .where(eq(filaments.ownerId, ownerId));
+
+  return {
+    filamentCount: Number(summary?.filamentCount ?? 0),
+    totalWeight: Number(summary?.totalWeight ?? 0),
+    lowStockCount: Number(summary?.lowStockCount ?? 0),
+  };
+}

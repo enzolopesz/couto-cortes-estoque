@@ -1,28 +1,106 @@
+import { z } from "zod";
+import { notifyOwner } from "./_core/notification";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import {
+  createFilament,
+  deleteFilament,
+  getFilamentById,
+  getInventorySummary,
+  listFilamentsByOwner,
+  updateFilament,
+} from "./db";
+import type { Filament } from "../drizzle/schema";
+
+const filamentInput = z.object({
+  material: z.string().trim().min(1, "Informe o material").max(80),
+  color: z.string().trim().min(1, "Informe a cor").max(80),
+  brand: z.string().trim().min(1, "Informe a marca").max(120),
+  diameter: z.enum(["1.75", "2.85"]),
+  initialWeight: z.number().int().min(0, "O peso não pode ser negativo"),
+  currentWeight: z.number().int().min(0, "O peso não pode ser negativo"),
+  minimumWeight: z.number().int().min(0, "O estoque mínimo não pode ser negativo"),
+  rollCost: z.number().min(0, "O custo não pode ser negativo"),
+  location: z.string().trim().min(1, "Informe a localização").max(120),
+  status: z.enum(["available", "reserved", "finished"]),
+  observation: z.string().trim().max(1000).optional().nullable(),
+}).refine(value => value.currentWeight <= value.initialWeight, {
+  message: "O peso atual não pode ser maior que o peso inicial",
+  path: ["currentWeight"],
+});
+
+async function notifyLowStock(filament: Filament): Promise<boolean> {
+  try {
+    return await notifyOwner({
+      title: `Estoque baixo: ${filament.material} ${filament.color}`,
+      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} g disponíveis, no limite mínimo de ${filament.minimumWeight} g. Localização: ${filament.location}.`,
+    });
+  } catch (error) {
+    console.warn("[Filaments] Could not send low-stock notification:", error);
+    return false;
+  }
+}
+
+const filamentRouter = router({
+  list: protectedProcedure.query(({ ctx }) => listFilamentsByOwner(ctx.user.id)),
+
+  summary: protectedProcedure.query(({ ctx }) => getInventorySummary(ctx.user.id)),
+
+  create: protectedProcedure.input(filamentInput).mutation(async ({ ctx, input }) => {
+    const created = await createFilament({
+      ...input,
+      ownerId: ctx.user.id,
+      diameter: input.diameter,
+      rollCost: input.rollCost.toFixed(2),
+      observation: input.observation || null,
+    });
+    const notificationSent = created && created.currentWeight <= created.minimumWeight
+      ? await notifyLowStock(created)
+      : true;
+    return { filament: created, notificationSent };
+  }),
+
+  update: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), data: filamentInput }))
+    .mutation(async ({ ctx, input }) => {
+      const previous = await getFilamentById(input.id, ctx.user.id);
+      if (!previous) return null;
+
+      const updated = await updateFilament(input.id, ctx.user.id, {
+        ...input.data,
+        diameter: input.data.diameter,
+        rollCost: input.data.rollCost.toFixed(2),
+        observation: input.data.observation || null,
+      });
+      const notificationSent = updated && updated.currentWeight <= updated.minimumWeight
+        ? await notifyLowStock(updated)
+        : true;
+      return { filament: updated, notificationSent };
+    }),
+
+  remove: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await getFilamentById(input.id, ctx.user.id);
+      if (!existing) return { success: false as const };
+      await deleteFilament(input.id, ctx.user.id);
+      return { success: true as const };
+    }),
+});
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
-
-  // TODO: add feature routers here, e.g.
-  // todo: router({
-  //   list: protectedProcedure.query(({ ctx }) =>
-  //     db.getUserTodos(ctx.user.id)
-  //   ),
-  // }),
+  filaments: filamentRouter,
 });
 
 export type AppRouter = typeof appRouter;

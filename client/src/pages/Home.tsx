@@ -1,33 +1,7 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+import { Boxes, MoveUpRight } from "lucide-react";
+import { Link } from "wouter";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
 export default function Home() {
-  // The useAuth hook provides authentication state.
-  // To implement login/logout, call logout(), or start login from an event
-  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
-  // startLogin() during render (no href={startLogin()}) — it mints a one-time
-  // nonce cookie and must run only at the moment of navigation.
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
-
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
-
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
-  );
+  return <main className="min-h-screen bg-[#050914] text-white"><div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 text-center"><div className="grid h-16 w-16 place-items-center rounded-2xl border border-[#168BFF]/30 bg-[#168BFF]/10 text-[#55B3FF]"><Boxes className="h-7 w-7" /></div><div className="mt-7 font-mono text-[10px] uppercase tracking-[.28em] text-[#168BFF]">Couto & Cortês · área operacional</div><h1 className="mt-4 font-display text-4xl font-semibold tracking-[-.05em] sm:text-6xl">Controle de estoque<br /><span className="text-slate-500">para fabricação digital.</span></h1><p className="mt-5 max-w-lg text-sm leading-7 text-slate-500">Ambiente administrativo privado para acompanhar filamentos e matéria-prima da operação.</p><Link href="/estoque/login"><Button className="mt-8 h-12 rounded-xl bg-[#168BFF] px-6 font-semibold text-white hover:bg-[#0d78df]">Acessar painel <MoveUpRight className="ml-2 h-4 w-4" /></Button></Link></div></main>;
 }
