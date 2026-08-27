@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const menuItems = [
   { icon: LayoutDashboard, label: "Visão geral", path: "/estoque" },
   { icon: Boxes, label: "Filamentos", path: "/estoque/filamentos" },
-  { icon: Wrench, label: "Movimentações", path: "#movimentacoes", soon: true },
+  { icon: Wrench, label: "Movimentações", path: "/estoque/movimentacoes" },
   { icon: Warehouse, label: "Produtos prontos", path: "#produtos-prontos", soon: true },
   { icon: Settings2, label: "Configurações", path: "#configuracoes", soon: true },
 ];

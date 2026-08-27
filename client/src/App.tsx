@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import AdminLogin from "./pages/AdminLogin";
 import Dashboard from "./pages/Dashboard";
 import Filaments from "./pages/Filaments";
+import Movements from "./pages/Movements";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 
@@ -19,7 +20,8 @@ function Router() {
     <Route path="/" component={Home} />
     <Route path="/estoque/login" component={AdminLogin} />
     <Route path="/estoque"><ProtectedAdmin><Dashboard /></ProtectedAdmin></Route>
-    <Route path="/estoque/filamentos"><ProtectedAdmin><Filaments /></ProtectedAdmin></Route>
+    <Route path="/estoque/filamentos" component={() => <ProtectedAdmin><Filaments /></ProtectedAdmin>} />
+      <Route path="/estoque/movimentacoes" component={() => <ProtectedAdmin><Movements /></ProtectedAdmin>} />
     <Route path="/404" component={NotFound} />
     <Route component={NotFound} />
   </Switch>;

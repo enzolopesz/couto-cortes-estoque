@@ -1,0 +1,77 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Check, ClipboardEdit, Filter, History, Loader2, Minus, PackageCheck, Plus, RefreshCw, Search, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+
+type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
+const types: Record<MovementType, { label: string; short: string; icon: LucideIcon; className: string; sign: string }> = {
+  entry: { label: "Entrada", short: "Entrada", icon: ArrowDownToLine, className: "border-[#24D18A]/20 bg-[#24D18A]/10 text-[#5DE7AB]", sign: "+" },
+  consumption: { label: "Consumo em impressão", short: "Consumo", icon: ArrowUpFromLine, className: "border-[#168BFF]/20 bg-[#168BFF]/10 text-[#55B3FF]", sign: "−" },
+  loss: { label: "Perda / descarte", short: "Perda", icon: AlertTriangle, className: "border-red-400/20 bg-red-500/10 text-red-300", sign: "−" },
+  adjustment: { label: "Ajuste", short: "Ajuste", icon: ClipboardEdit, className: "border-[#7C5CFF]/20 bg-[#7C5CFF]/10 text-[#B9A9FF]", sign: "±" },
+  reservation: { label: "Reserva", short: "Reserva", icon: PackageCheck, className: "border-[#FFB547]/20 bg-[#FFB547]/10 text-[#FFCB70]", sign: "−" },
+  release_reservation: { label: "Liberação de reserva", short: "Liberação", icon: RefreshCw, className: "border-cyan-400/20 bg-cyan-400/10 text-cyan-300", sign: "+" },
+};
+const typeOptions = Object.entries(types) as [MovementType, typeof types[MovementType]][];
+const formatWeight = (value: unknown) => `${Number(value ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} g`;
+const formatDate = (value: Date | string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+export default function Movements() {
+  const [, setLocation] = useLocation();
+  const list = trpc.movements.list.useQuery();
+  const filaments = trpc.filaments.list.useQuery();
+  const utils = trpc.useUtils();
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [filamentFilter, setFilamentFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ filamentId: "", type: "entry" as MovementType, quantity: "", newWeight: "", description: "" });
+  const create = trpc.movements.create.useMutation({
+    onSuccess: () => {
+      toast.success("Movimentação registrada", { description: "Saldo e histórico atualizados com segurança." });
+      void utils.movements.list.invalidate();
+      void utils.filaments.list.invalidate();
+      void utils.filaments.summary.invalidate();
+      setOpen(false);
+      setForm({ filamentId: "", type: "entry", quantity: "", newWeight: "", description: "" });
+    },
+    onError: error => toast.error("Não foi possível registrar a movimentação", { description: error.message }),
+  });
+
+  const selected = filaments.data?.find(item => item.id === Number(form.filamentId));
+  const quantity = Number(form.quantity || 0);
+  const newWeight = Number(form.newWeight || 0);
+  const preview = selected ? (form.type === "adjustment" ? newWeight : Number(selected.currentWeight) + (types[form.type].sign === "+" ? quantity : -quantity)) : 0;
+  const validPreview = Boolean(selected && preview >= 0 && (form.type === "adjustment" ? form.newWeight !== "" : quantity > 0));
+
+  const filtered = useMemo(() => (list.data ?? []).filter(item => {
+    const haystack = `${item.filamentMaterial} ${item.filamentBrand} ${item.filamentColor} ${item.description ?? ""}`.toLowerCase();
+    const date = new Date(item.createdAt).getTime();
+    const start = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity;
+    const end = to ? new Date(`${to}T23:59:59`).getTime() : Infinity;
+    return haystack.includes(query.toLowerCase()) && (typeFilter === "all" || item.type === typeFilter) && (filamentFilter === "all" || String(item.filamentId) === filamentFilter) && date >= start && date <= end;
+  }), [list.data, query, typeFilter, filamentFilter, from, to]);
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selected || !validPreview) { toast.error("Revise os dados da movimentação", { description: preview < 0 ? "O saldo não pode ficar negativo." : "Informe uma quantidade válida." }); return; }
+    create.mutate({ filamentId: selected.id, type: form.type, quantityGrams: form.type === "adjustment" ? 0 : quantity, adjustmentWeight: form.type === "adjustment" ? newWeight : undefined, description: form.description || null });
+  }
+
+  return <div className="mx-auto max-w-[1500px] space-y-7">
+    <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><button onClick={() => setLocation("/estoque")} className="mb-4 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.2em] text-slate-500 hover:text-[#55B3FF]"><span>Estoque</span><span>/</span><span className="text-[#55B3FF]">Movimentações</span></button><h1 className="font-display text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Movimentações</h1><p className="mt-2 text-sm text-slate-500">Acompanhe todas as entradas e saídas de filamentos.</p></div><Button onClick={() => setOpen(true)} className="h-11 rounded-xl bg-[#168BFF] px-5 font-semibold text-white hover:bg-[#0d78df]"><Plus className="mr-2 h-4 w-4" />Nova movimentação</Button></header>
+    <Card className="border-white/[.07] bg-[#0B1220] shadow-none"><CardContent className="p-4"><div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(220px,1fr)_180px_180px_140px_140px]"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><Input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar por filamento, cor ou descrição..." className="h-11 border-white/[.08] bg-white/[.03] pl-10 text-white placeholder:text-slate-600 focus-visible:ring-[#168BFF]" /></div><select value={typeFilter} onChange={event => setTypeFilter(event.target.value)} className="h-11 rounded-md border border-white/[.08] bg-[#101A2A] px-3 text-sm text-slate-300 outline-none focus:border-[#168BFF]"><option value="all">Todos os tipos</option>{typeOptions.map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</select><select value={filamentFilter} onChange={event => setFilamentFilter(event.target.value)} className="h-11 rounded-md border border-white/[.08] bg-[#101A2A] px-3 text-sm text-slate-300 outline-none focus:border-[#168BFF]"><option value="all">Todos os filamentos</option>{(filaments.data ?? []).map(item => <option key={item.id} value={item.id}>{item.material} · {item.color}</option>)}</select><Input type="date" value={from} onChange={event => setFrom(event.target.value)} aria-label="Data inicial" className="h-11 border-white/[.08] bg-white/[.03] text-slate-300" /><Input type="date" value={to} onChange={event => setTo(event.target.value)} aria-label="Data final" className="h-11 border-white/[.08] bg-white/[.03] text-slate-300" /></div>{(query || typeFilter !== "all" || filamentFilter !== "all" || from || to) && <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Filter className="h-3 w-3" /><span>{filtered.length} resultado{filtered.length === 1 ? "" : "s"}</span><button onClick={() => { setQuery(""); setTypeFilter("all"); setFilamentFilter("all"); setFrom(""); setTo(""); }} className="flex items-center gap-1 text-[#55B3FF] hover:text-white"><X className="h-3 w-3" />Limpar filtros</button></div>}</CardContent></Card>
+    <Card className="border-white/[.07] bg-[#0B1220] shadow-none"><CardContent className="p-0"><div className="hidden grid-cols-[150px_minmax(220px,1.4fr)_170px_110px_110px_minmax(170px,1fr)_140px] gap-4 border-b border-white/[.07] px-5 py-4 font-mono text-[10px] uppercase tracking-[.15em] text-slate-600 lg:grid"><span>Data e hora</span><span>Filamento</span><span>Tipo</span><span>Quantidade</span><span>Saldo</span><span>Descrição</span><span>Usuário</span></div>{list.isLoading ? <div className="p-14 text-center text-sm text-slate-500"><Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-[#168BFF]" />Carregando histórico...</div> : list.isError ? <div className="p-14 text-center"><AlertTriangle className="mx-auto h-7 w-7 text-red-300" /><h3 className="mt-4 font-display font-semibold text-white">Falha ao carregar movimentações</h3><Button variant="outline" onClick={() => { void list.refetch(); }} className="mt-5 border-white/10 bg-transparent text-slate-300">Tentar novamente</Button></div> : filtered.length === 0 ? <div className="p-14 text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-dashed border-[#168BFF]/30 bg-[#168BFF]/5 text-[#55B3FF]"><History className="h-6 w-6" /></div><h3 className="mt-5 font-display text-lg font-semibold text-white">Nenhuma movimentação encontrada</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Registre a primeira entrada, saída ou conferência para criar o histórico da operação.</p><Button onClick={() => setOpen(true)} className="mt-6 rounded-xl bg-[#168BFF] text-white hover:bg-[#0d78df]"><Plus className="mr-2 h-4 w-4" />Registrar movimentação</Button></div> : <div className="divide-y divide-white/[.05]">{filtered.map(item => { const meta = types[item.type as MovementType]; const Icon = meta.icon; const relatedFilament = filaments.data?.find(f => f.id === item.filamentId); const isLow = relatedFilament ? relatedFilament.currentWeight <= relatedFilament.minimumWeight : false; return <div key={item.id} className="grid gap-3 px-5 py-5 transition-colors hover:bg-white/[.02] lg:grid-cols-[150px_minmax(220px,1.4fr)_170px_110px_110px_minmax(170px,1fr)_140px] lg:items-center"><div className="font-mono text-xs text-slate-500">{formatDate(item.createdAt)}</div><div className="flex items-center gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[.03] text-[#55B3FF]"><Boxes className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate font-medium text-white">{item.filamentBrand} · {item.filamentMaterial}</div><div className="mt-1 truncate font-mono text-[10px] uppercase tracking-wider text-slate-500">{item.filamentColor}</div></div></div><div><Badge className={`${meta.className} gap-1.5`}><Icon className="h-3 w-3" />{meta.short}</Badge>{item.type === "loss" && <div className="mt-1 font-mono text-[9px] uppercase text-red-300/60">atenção</div>}</div><div className={item.type === "loss" ? "font-mono text-sm text-red-300" : "font-mono text-sm text-slate-200"}>{meta.sign}{formatWeight(item.quantityGrams)}</div><div><div className="font-mono text-sm text-white">{formatWeight(item.resultingWeightGrams)}</div><div className={`mt-1 font-mono text-[9px] uppercase ${isLow ? "text-[#FFCB70]" : "text-slate-600"}`}>{isLow ? "saldo baixo" : `antes ${formatWeight(item.previousWeightGrams)}`}</div></div><div className="truncate text-sm text-slate-500">{item.description || "—"}</div><div className="truncate text-xs text-slate-500">{item.userName || item.userEmail || "Gestor"}</div></div>; })}</div>}</CardContent></Card>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0D1727] text-white sm:max-w-xl"><DialogHeader><DialogTitle className="font-display text-xl">Nova movimentação</DialogTitle><DialogDescription className="text-slate-500">Atualize o saldo do rolo e registre o motivo da operação.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-5 pt-2"><div className="space-y-2"><Label>Filamento</Label><select required value={form.filamentId} onChange={event => setForm(current => ({ ...current, filamentId: event.target.value }))} className="h-10 w-full rounded-md border border-white/10 bg-white/[.03] px-3 text-sm text-white outline-none focus:border-[#168BFF]"><option value="">Selecione o filamento</option>{(filaments.data ?? []).map(item => <option key={item.id} value={item.id}>{item.brand} · {item.material} · {item.color} — {formatWeight(item.currentWeight)}</option>)}</select></div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>Tipo</Label><select value={form.type} onChange={event => setForm(current => ({ ...current, type: event.target.value as MovementType }))} className="h-10 w-full rounded-md border border-white/10 bg-white/[.03] px-3 text-sm text-white outline-none focus:border-[#168BFF]">{typeOptions.map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}</select></div><div className="space-y-2"><Label>{form.type === "adjustment" ? "Novo peso real (g)" : "Quantidade (g)"}</Label><Input required min="0" step="0.01" type="number" value={form.type === "adjustment" ? form.newWeight : form.quantity} onChange={event => setForm(current => ({ ...current, [form.type === "adjustment" ? "newWeight" : "quantity"]: event.target.value }))} placeholder="0" className="border-white/10 bg-white/[.03] text-white" /></div></div>{selected && <div className={`rounded-xl border p-4 ${preview < 0 ? "border-red-400/30 bg-red-500/[.07]" : "border-[#168BFF]/20 bg-[#168BFF]/[.06]"}`}><div className="flex items-center justify-between gap-4"><div><div className="font-mono text-[10px] uppercase tracking-[.18em] text-slate-500">Prévia do saldo</div><div className="mt-2 text-sm text-slate-400">{formatWeight(selected.currentWeight)} <span className="px-2 text-slate-600">→</span><strong className={preview < 0 ? "text-red-300" : "text-white"}>{formatWeight(preview)}</strong></div></div>{preview < 0 ? <AlertTriangle className="h-5 w-5 text-red-300" /> : <Check className="h-5 w-5 text-[#5DE7AB]" />}</div>{preview < 0 && <p className="mt-3 text-xs text-red-300">O saldo resultante não pode ser negativo.</p>}</div>}<div className="space-y-2"><Label>Descrição / observação <span className="text-slate-600">(opcional)</span></Label><textarea value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Ex.: produção da peça X, embalagem danificada..." rows={3} className="w-full resize-none rounded-md border border-white/10 bg-white/[.03] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-600 focus:border-[#168BFF]" /></div><DialogFooter><Button type="button" variant="ghost" onClick={() => setOpen(false)} className="text-slate-400 hover:bg-white/[.04] hover:text-white">Cancelar</Button><Button type="submit" disabled={create.isPending || !validPreview} className="bg-[#168BFF] text-white hover:bg-[#0d78df]">{create.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Confirmar movimentação</Button></DialogFooter></form></DialogContent></Dialog>
+  </div>;
+}

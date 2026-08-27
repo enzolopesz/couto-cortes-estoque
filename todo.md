@@ -50,3 +50,28 @@
 - [x] Adicionar estados e toasts de erro para dashboard, listagem e mutações de filamentos
 - [x] Criar documentação de entrega com tabelas, rotas e instruções para o primeiro administrador
 - [x] Adicionar tratamento explícito de erro para a query de listagem de filamentos, evitando confundir falha de carga com estado vazio
+- [x] Incidente: reiniciar o servidor de desenvolvimento e confirmar que o preview volta a responder
+
+## Nova etapa: movimentações de estoque
+
+- [x] Criar tabela stock_movements com histórico auditável e escopo por usuário
+- [x] Aplicar migração e documentar a limitação/estratégia equivalente ao RLS no MySQL/TiDB provisionado
+- [x] Implementar operação transacional para criar movimentação e atualizar saldo do filamento juntos
+- [x] Validar entradas, consumos, perdas, ajustes, reservas e liberações sem permitir saldo negativo
+- [x] Adicionar rota protegida /estoque/movimentacoes e remover o selo Em breve do menu
+- [x] Construir histórico com busca, filtros por tipo/período/filamento e ordenação recente primeiro
+- [x] Construir modal de nova movimentação com prévia clara do saldo resultante
+- [x] Adicionar badges e ícones específicos por tipo, destacando perdas e saldo baixo
+- [x] Atualizar dashboard, lista de filamentos e histórico após movimentações sem recarregar a página
+- [x] Compactar os cards da visão geral em grade de três colunas no desktop
+- [x] Adicionar testes para cálculo de saldo, validações e escopo de acesso
+- [x] Atualizar documentação com tabelas, funções/RPCs e roteiro de teste de entrada e consumo
+
+## Revisão dos testes de movimentações
+
+- [x] Adicionar testes cobrindo o cálculo de saldo e o peso resultante para todos os tipos de movimentação
+- [x] Adicionar teste da operação transacional garantindo histórico e atualização do filamento no mesmo fluxo
+- [x] Adicionar teste que comprove rejeição de saldo negativo no backend durante a criação da movimentação
+- [x] Adicionar teste do fluxo createStockMovement que rejeita saldo negativo antes de atualizar filamento ou inserir histórico
+- [x] Tornar os testes transacionais determinísticos com reset explícito do cache do banco
+- [x] Assegurar no teste negativo que update e insert não foram executados

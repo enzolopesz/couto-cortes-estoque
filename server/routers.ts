@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "./_core/notification";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -11,6 +12,8 @@ import {
   getInventorySummary,
   listFilamentsByOwner,
   updateFilament,
+  listStockMovementsByOwner,
+  createStockMovement,
 } from "./db";
 import type { Filament } from "../drizzle/schema";
 
@@ -42,6 +45,32 @@ async function notifyLowStock(filament: Filament): Promise<boolean> {
     return false;
   }
 }
+
+const movementInput = z.object({
+  filamentId: z.number().int().positive(),
+  type: z.enum(["entry", "consumption", "loss", "adjustment", "reservation", "release_reservation"]),
+  quantityGrams: z.number().min(0).max(100000),
+  adjustmentWeight: z.number().min(0).max(100000).optional(),
+  description: z.string().trim().max(1000).optional().nullable(),
+}).superRefine((value, ctx) => {
+  if (value.type === "adjustment" && value.adjustmentWeight === undefined) {
+    ctx.addIssue({ code: "custom", path: ["adjustmentWeight"], message: "Informe o novo peso real do rolo" });
+  }
+  if (value.type !== "adjustment" && value.quantityGrams <= 0) {
+    ctx.addIssue({ code: "custom", path: ["quantityGrams"], message: "Informe uma quantidade maior que zero" });
+  }
+});
+
+const movementRouter = router({
+  list: protectedProcedure.query(({ ctx }) => listStockMovementsByOwner(ctx.user.id)),
+  create: protectedProcedure.input(movementInput).mutation(async ({ ctx, input }) => {
+    try {
+      return await createStockMovement({ ...input, ownerId: ctx.user.id, createdBy: ctx.user.id });
+    } catch (error) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível registrar a movimentação" });
+    }
+  }),
+});
 
 const filamentRouter = router({
   list: protectedProcedure.query(({ ctx }) => listFilamentsByOwner(ctx.user.id)),
@@ -101,6 +130,7 @@ export const appRouter = router({
     }),
   }),
   filaments: filamentRouter,
+  movements: movementRouter,
 });
 
 export type AppRouter = typeof appRouter;

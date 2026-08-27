@@ -1,9 +1,15 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { filaments, InsertFilament, InsertUser, users, User } from "../drizzle/schema";
+import { filaments, InsertFilament, InsertUser, users, User, stockMovements } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+/** Test-only reset hook; production code never calls this. */
+export function resetDbForTests() {
+  _db = null;
+}
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -130,6 +136,99 @@ export async function deleteFilament(id: number, ownerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
   await db.delete(filaments).where(and(eq(filaments.id, id), eq(filaments.ownerId, ownerId)));
+}
+
+export async function listStockMovementsByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  return db
+    .select({
+      id: stockMovements.id,
+      filamentId: filaments.id,
+      filamentMaterial: filaments.material,
+      filamentColor: filaments.color,
+      filamentBrand: filaments.brand,
+      type: stockMovements.type,
+      quantityGrams: stockMovements.quantityGrams,
+      previousWeightGrams: stockMovements.previousWeightGrams,
+      resultingWeightGrams: stockMovements.resultingWeightGrams,
+      description: stockMovements.description,
+      createdBy: stockMovements.createdBy,
+      userName: users.name,
+      userEmail: users.email,
+      createdAt: stockMovements.createdAt,
+    })
+    .from(stockMovements)
+    .innerJoin(filaments, eq(stockMovements.filamentId, filaments.id))
+    .innerJoin(users, eq(stockMovements.createdBy, users.id))
+    .where(eq(filaments.ownerId, ownerId))
+    .orderBy(desc(stockMovements.createdAt));
+}
+
+export type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
+
+export function calculateMovementResult(previous: number, type: MovementType, quantityGrams: number, adjustmentWeight?: number) {
+  const resulting = type === "adjustment"
+    ? Number(adjustmentWeight)
+    : previous + (["entry", "release_reservation"].includes(type) ? quantityGrams : -quantityGrams);
+  if (!Number.isFinite(resulting) || resulting < 0) throw new Error("O saldo do filamento não pode ficar negativo");
+  const effectiveQuantity = type === "adjustment" ? Math.abs(resulting - previous) : quantityGrams;
+  if (effectiveQuantity <= 0) throw new Error("A movimentação precisa alterar o saldo");
+  return { resulting, effectiveQuantity };
+}
+
+export async function createStockMovement(input: {
+  ownerId: number;
+  createdBy: number;
+  filamentId: number;
+  type: MovementType;
+  quantityGrams: number;
+  adjustmentWeight?: number;
+  description?: string | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+
+  return db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(filaments)
+      .where(and(eq(filaments.id, input.filamentId), eq(filaments.ownerId, input.ownerId)))
+      .limit(1);
+    const filament = rows[0];
+    if (!filament) throw new Error("Filamento não encontrado");
+
+    const previous = Number(filament.currentWeight);
+    const { resulting, effectiveQuantity } = calculateMovementResult(previous, input.type, input.quantityGrams, input.adjustmentWeight);
+
+    const nextStatus = resulting === 0
+      ? "finished"
+      : input.type === "reservation"
+        ? "reserved"
+        : input.type === "release_reservation" || filament.status === "finished"
+          ? "available"
+          : filament.status;
+    const updateResult = await tx
+      .update(filaments)
+      .set({ currentWeight: Math.round(resulting), status: nextStatus, updatedAt: new Date() })
+      .where(and(eq(filaments.id, input.filamentId), eq(filaments.ownerId, input.ownerId), eq(filaments.currentWeight, filament.currentWeight)));
+    const affectedRows = Number((updateResult as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0);
+    if (affectedRows !== 1) throw new Error("O saldo foi alterado por outra operação. Atualize e tente novamente");
+
+    const movementId = randomUUID();
+    await tx.insert(stockMovements).values({
+      id: movementId,
+      filamentId: input.filamentId,
+      type: input.type,
+      quantityGrams: effectiveQuantity.toFixed(2),
+      previousWeightGrams: previous.toFixed(2),
+      resultingWeightGrams: resulting.toFixed(2),
+      description: input.description?.trim() || null,
+      createdBy: input.createdBy,
+    });
+
+    return { movement: { id: movementId }, previousWeight: previous, resultingWeight: resulting };
+  });
 }
 
 export async function getInventorySummary(ownerId: number) {

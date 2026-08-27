@@ -43,3 +43,22 @@ export const filaments = mysqlTable("filaments", {
 
 export type Filament = typeof filaments.$inferSelect;
 export type InsertFilament = typeof filaments.$inferInsert;
+
+/**
+ * Immutable audit log for inventory changes. IDs use the project's existing
+ * numeric user/filament keys; movement ids are UUID strings generated server-side.
+ */
+export const stockMovements = mysqlTable("stock_movements", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  filamentId: int("filamentId").notNull().references(() => filaments.id),
+  type: mysqlEnum("type", ["entry", "consumption", "loss", "adjustment", "reservation", "release_reservation"]).notNull(),
+  quantityGrams: decimal("quantityGrams", { precision: 12, scale: 2 }).notNull(),
+  previousWeightGrams: decimal("previousWeightGrams", { precision: 12, scale: 2 }).notNull(),
+  resultingWeightGrams: decimal("resultingWeightGrams", { precision: 12, scale: 2 }).notNull(),
+  description: text("description"),
+  createdBy: int("createdBy").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type InsertStockMovement = typeof stockMovements.$inferInsert;
