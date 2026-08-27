@@ -80,3 +80,31 @@
 
 - [x] Substituir todos os selects nativos da área /estoque pelo componente Select customizado sem alterar lógica, banco ou rotas
 - [x] Garantir dropdowns, opções, foco, hover, placeholder e ícones sem fundo branco no módulo de estoque
+
+## Nova etapa: unidades de medida compatíveis
+
+- [x] Adicionar unidade base de controle ao cadastro: Peso ou Unidade
+- [x] Adicionar peso por unidade/rolo em gramas quando aplicável, sem perder dados existentes
+- [x] Migrar filamentos existentes para unidade base Peso com saldo e pesos em gramas
+- [x] Permitir g, kg e rolo apenas para itens de Peso, condicionando rolo ao peso por unidade
+- [x] Permitir somente un e números inteiros para itens de Unidade
+- [x] Converter toda entrada de movimentação para gramas quando o item for controlado por Peso
+- [x] Armazenar e exibir saldo de itens de Unidade como números inteiros
+- [x] Mostrar rótulo dinâmico, opções compatíveis, conversão para gramas e prévia amigável no modal
+- [x] Rejeitar conversões incompatíveis e impedir saldo negativo no backend
+- [x] Atualizar filtros, tabelas, cards e documentação para exibir a unidade adequada
+- [x] Adicionar testes de conversão, compatibilidade, inteiros e preservação do histórico
+- [x] Adicionar teste do fluxo transacional de item por unidade, aceitando un inteira e rejeitando frações e g
+
+## Revisão de integridade das unidades
+
+- [x] Validar no backend que ajuste de item baseUnit=unit aceite somente saldo inteiro e remover dependência de arredondamento silencioso
+- [x] Garantir que saldos e movimentos de itens por unidade nunca persistam valores fracionários
+- [x] Adicionar teste real de ajuste fracionado para item por unidade, comprovando zero escritas
+- [x] Adicionar teste do backfill histórico preservando os novos campos genéricos
+
+## Revisão final do CRUD e backfill
+
+- [x] Validar no create/update de filamentos que itens baseUnit=unit usem saldos inicial, atual e mínimo inteiros
+- [x] Adicionar teste executável que verifique a cópia dos valores legados para os campos genéricos do backfill
+- [x] Adicionar teste executável do mapeamento real da migração, comprovando cópia de quantityGrams, previousWeightGrams e resultingWeightGrams

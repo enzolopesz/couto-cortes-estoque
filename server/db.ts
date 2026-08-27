@@ -138,10 +138,20 @@ export async function deleteFilament(id: number, ownerId: number) {
   await db.delete(filaments).where(and(eq(filaments.id, id), eq(filaments.ownerId, ownerId)));
 }
 
+export function backfillLegacyMovement(row: { quantityGrams: string | number; previousWeightGrams: string | number; resultingWeightGrams: string | number }) {
+  return {
+    inputUnit: "g" as const,
+    inputQuantity: Number(row.quantityGrams),
+    quantityBase: Number(row.quantityGrams),
+    previousBalance: Number(row.previousWeightGrams),
+    resultingBalance: Number(row.resultingWeightGrams),
+  };
+}
+
 export async function listStockMovementsByOwner(ownerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
-  return db
+  const rows = await db
     .select({
       id: stockMovements.id,
       filamentId: filaments.id,
@@ -152,6 +162,13 @@ export async function listStockMovementsByOwner(ownerId: number) {
       quantityGrams: stockMovements.quantityGrams,
       previousWeightGrams: stockMovements.previousWeightGrams,
       resultingWeightGrams: stockMovements.resultingWeightGrams,
+      resultingBalance: stockMovements.resultingBalance,
+      inputUnit: stockMovements.inputUnit,
+      inputQuantity: stockMovements.inputQuantity,
+      quantityBase: stockMovements.quantityBase,
+      previousBalance: stockMovements.previousBalance,
+      baseUnit: filaments.baseUnit,
+      weightPerUnit: filaments.weightPerUnit,
       description: stockMovements.description,
       createdBy: stockMovements.createdBy,
       userName: users.name,
@@ -163,16 +180,41 @@ export async function listStockMovementsByOwner(ownerId: number) {
     .innerJoin(users, eq(stockMovements.createdBy, users.id))
     .where(eq(filaments.ownerId, ownerId))
     .orderBy(desc(stockMovements.createdAt));
+  return rows.map(row => ({
+    ...row,
+    ...((Number(row.inputQuantity) === 0 && Number(row.quantityGrams) !== 0) ? backfillLegacyMovement(row) : {}),
+  }));
 }
 
 export type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
+export type BaseUnit = "weight" | "unit";
+export type InputUnit = "g" | "kg" | "roll" | "unit";
 
-export function calculateMovementResult(previous: number, type: MovementType, quantityGrams: number, adjustmentWeight?: number) {
+export function compatibleMovementUnits(baseUnit: BaseUnit, weightPerUnit?: number | null): InputUnit[] {
+  if (baseUnit === "unit") return ["unit"];
+  return weightPerUnit && weightPerUnit > 0 ? ["g", "kg", "roll"] : ["g", "kg"];
+}
+
+export function convertMovementToBase(inputQuantity: number, inputUnit: InputUnit, baseUnit: BaseUnit, weightPerUnit?: number | null) {
+  if (!Number.isFinite(inputQuantity) || inputQuantity <= 0) throw new Error("A quantidade precisa ser maior que zero");
+  if (baseUnit === "unit") {
+    if (inputUnit !== "unit") throw new Error("Itens controlados por unidade não aceitam g, kg ou rolo; use un");
+    if (!Number.isInteger(inputQuantity)) throw new Error("Itens controlados por unidade aceitam somente números inteiros em un");
+    return inputQuantity;
+  }
+  if (inputUnit === "unit") throw new Error("Itens controlados por peso não aceitam unidade");
+  if (inputUnit === "roll" && (!weightPerUnit || weightPerUnit <= 0)) throw new Error("Este item não possui peso por rolo configurado");
+  const grams = inputUnit === "kg" ? inputQuantity * 1000 : inputUnit === "roll" ? inputQuantity * Number(weightPerUnit) : inputQuantity;
+  if (!Number.isFinite(grams) || grams <= 0) throw new Error("A conversão da quantidade é inválida");
+  return grams;
+}
+
+export function calculateMovementResult(previous: number, type: MovementType, quantityBase: number, adjustmentWeight?: number) {
   const resulting = type === "adjustment"
     ? Number(adjustmentWeight)
-    : previous + (["entry", "release_reservation"].includes(type) ? quantityGrams : -quantityGrams);
+    : previous + (["entry", "release_reservation"].includes(type) ? quantityBase : -quantityBase);
   if (!Number.isFinite(resulting) || resulting < 0) throw new Error("O saldo do filamento não pode ficar negativo");
-  const effectiveQuantity = type === "adjustment" ? Math.abs(resulting - previous) : quantityGrams;
+  const effectiveQuantity = type === "adjustment" ? Math.abs(resulting - previous) : quantityBase;
   if (effectiveQuantity <= 0) throw new Error("A movimentação precisa alterar o saldo");
   return { resulting, effectiveQuantity };
 }
@@ -182,7 +224,8 @@ export async function createStockMovement(input: {
   createdBy: number;
   filamentId: number;
   type: MovementType;
-  quantityGrams: number;
+  inputUnit: InputUnit;
+  inputQuantity: number;
   adjustmentWeight?: number;
   description?: string | null;
 }) {
@@ -199,7 +242,15 @@ export async function createStockMovement(input: {
     if (!filament) throw new Error("Filamento não encontrado");
 
     const previous = Number(filament.currentWeight);
-    const { resulting, effectiveQuantity } = calculateMovementResult(previous, input.type, input.quantityGrams, input.adjustmentWeight);
+    const adjustmentWeight = Number(input.adjustmentWeight);
+    if (input.type === "adjustment") {
+      if (!Number.isFinite(adjustmentWeight) || adjustmentWeight < 0) throw new Error("O saldo real informado é inválido");
+      if (filament.baseUnit === "unit" && !Number.isInteger(adjustmentWeight)) throw new Error("Itens controlados por unidade aceitam somente números inteiros em un");
+    }
+    const quantityBase = input.type === "adjustment"
+      ? adjustmentWeight
+      : convertMovementToBase(input.inputQuantity, input.inputUnit, filament.baseUnit, filament.weightPerUnit);
+    const { resulting, effectiveQuantity } = calculateMovementResult(previous, input.type, quantityBase, adjustmentWeight);
 
     const nextStatus = resulting === 0
       ? "finished"
@@ -210,7 +261,7 @@ export async function createStockMovement(input: {
           : filament.status;
     const updateResult = await tx
       .update(filaments)
-      .set({ currentWeight: Math.round(resulting), status: nextStatus, updatedAt: new Date() })
+      .set({ currentWeight: filament.baseUnit === "unit" ? resulting : Math.round(resulting), status: nextStatus, updatedAt: new Date() })
       .where(and(eq(filaments.id, input.filamentId), eq(filaments.ownerId, input.ownerId), eq(filaments.currentWeight, filament.currentWeight)));
     const affectedRows = Number((updateResult as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0);
     if (affectedRows !== 1) throw new Error("O saldo foi alterado por outra operação. Atualize e tente novamente");
@@ -220,9 +271,14 @@ export async function createStockMovement(input: {
       id: movementId,
       filamentId: input.filamentId,
       type: input.type,
-      quantityGrams: effectiveQuantity.toFixed(2),
-      previousWeightGrams: previous.toFixed(2),
-      resultingWeightGrams: resulting.toFixed(2),
+      quantityGrams: filament.baseUnit === "weight" ? effectiveQuantity.toFixed(2) : "0",
+      previousWeightGrams: filament.baseUnit === "weight" ? previous.toFixed(2) : "0",
+      resultingWeightGrams: filament.baseUnit === "weight" ? resulting.toFixed(2) : "0",
+      inputUnit: input.type === "adjustment" ? filament.baseUnit === "unit" ? "unit" : "g" : input.inputUnit,
+      inputQuantity: input.type === "adjustment" ? effectiveQuantity.toFixed(3) : input.inputQuantity.toFixed(3),
+      quantityBase: filament.baseUnit === "unit" ? effectiveQuantity.toFixed(0) : effectiveQuantity.toFixed(2),
+      previousBalance: filament.baseUnit === "unit" ? previous.toFixed(0) : previous.toFixed(2),
+      resultingBalance: filament.baseUnit === "unit" ? resulting.toFixed(0) : resulting.toFixed(2),
       description: input.description?.trim() || null,
       createdBy: input.createdBy,
     });
@@ -237,7 +293,8 @@ export async function getInventorySummary(ownerId: number) {
   const [summary] = await db
     .select({
       filamentCount: count(filaments.id),
-      totalWeight: sql<number>`COALESCE(SUM(${filaments.currentWeight}), 0)`,
+      totalWeight: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.baseUnit} = 'weight' THEN ${filaments.currentWeight} ELSE 0 END), 0)`,
+      totalUnits: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.baseUnit} = 'unit' THEN ${filaments.currentWeight} ELSE 0 END), 0)`,
       lowStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.currentWeight} <= ${filaments.minimumWeight} THEN 1 ELSE 0 END), 0)`,
     })
     .from(filaments)
@@ -246,6 +303,7 @@ export async function getInventorySummary(ownerId: number) {
   return {
     filamentCount: Number(summary?.filamentCount ?? 0),
     totalWeight: Number(summary?.totalWeight ?? 0),
+    totalUnits: Number(summary?.totalUnits ?? 0),
     lowStockCount: Number(summary?.lowStockCount ?? 0),
   };
 }

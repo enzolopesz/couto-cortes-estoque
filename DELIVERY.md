@@ -9,7 +9,7 @@ Esta etapa implementa um painel administrativo privado e independente para contr
 | Tabela | Finalidade | Isolamento |
 |---|---|---|
 | `users` | Usuários autenticados do scaffold, com `id`, `openId`, nome, e-mail, papel e timestamps. | Sessão do usuário autenticado. O proprietário do projeto é promovido automaticamente a `admin` pelo fluxo OAuth existente. |
-| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, pesos, mínimo, custo, localização, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
+| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, unidade base, peso por rolo/unidade, saldo, mínimo, custo, localização, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
 
 ### Nota sobre RLS
 
@@ -21,10 +21,10 @@ O projeto foi inicializado no stack full-stack provisionado, que usa MySQL/TiDB 
 |---|---|---|
 | `/` | Público | Entrada mínima independente para o painel. |
 | `/estoque/login` | Público | Tela de autenticação segura via OAuth do projeto. Após autenticação, redireciona para `/estoque`. |
-| `/estoque` | Protegida | Dashboard com total de rolos, peso disponível, itens abaixo do mínimo, inventário recente e estado vazio. |
+| `/estoque` | Protegida | Dashboard com itens cadastrados, saldo separado em peso/unidades, itens abaixo do mínimo, inventário recente e estado vazio. |
 | `/estoque/filamentos` | Protegida | CRUD completo com busca, filtros por material, marca, cor e status, filtro de estoque baixo, edição e exclusão confirmada. |
 
-Os itens **Movimentações**, **Produtos prontos** e **Configurações** aparecem como “Em breve” e não executam funcionalidades nesta etapa.
+Os itens **Produtos prontos** e **Configurações** aparecem como “Em breve”. **Movimentações** está disponível em `/estoque/movimentacoes`.
 
 ## Primeiro usuário administrador
 
@@ -63,10 +63,21 @@ A página `/estoque/movimentacoes` contém busca por filamento, marca, cor e des
 
 ## Como testar entrada e consumo
 
-Primeiro, cadastre um filamento em `/estoque/filamentos` com peso inicial e peso disponível, por exemplo, 1.000 g. Em seguida, abra `/estoque/movimentacoes`, selecione **Nova movimentação**, escolha o rolo, selecione **Entrada**, informe 500 g e confirme. O saldo deve passar de 1.000 g para 1.500 g e o histórico deve registrar a operação.
+Primeiro, cadastre um item em `/estoque/filamentos` e escolha a unidade base. Para um filamento, use **Peso** e, se quiser movimentar por rolo, informe 1.000 g em peso por rolo. Para um item contado, use **Unidade** e informe saldos inteiros. Em seguida, abra `/estoque/movimentacoes`, selecione **Nova movimentação**, escolha o rolo, selecione **Entrada**, informe 500 g e confirme. O saldo deve passar de 1.000 g para 1.500 g e o histórico deve registrar a operação.
 
 Depois, repita o fluxo selecionando **Consumo em impressão** e informando 200 g. O saldo deve passar de 1.500 g para 1.300 g. Para verificar a proteção, tente consumir mais do que o saldo disponível: a confirmação deve ser bloqueada na prévia e a API também rejeita a operação. O dashboard e a lista de filamentos devem refletir o novo saldo automaticamente.
 
 ### Estratégia de acesso
 
 O stack provisionado usa MySQL/TiDB, portanto não possui RLS nativo do Supabase. O equivalente aplicado no servidor exige sessão autenticada, grava `createdBy` a partir da sessão e lista movimentos somente quando o filamento relacionado pertence ao `ownerId` autenticado. A movimentação não é exposta por procedimento público e não pode ser excluída pela interface.
+
+
+## Etapa 3 — Unidades de medida compatíveis
+
+A tabela `filaments` agora possui `baseUnit` (`weight` ou `unit`) e `weightPerUnit` em gramas. Os filamentos existentes foram preservados e permanecem controlados por peso, com base padrão em gramas. A tabela `stock_movements` ganhou `inputUnit`, `inputQuantity`, `quantityBase`, `previousBalance` e `resultingBalance`; as colunas legadas em gramas continuam disponíveis para compatibilidade com o histórico anterior.
+
+Para itens de peso, o modal permite `g` e `kg`; `rolo` aparece somente quando `weightPerUnit` está configurado. As conversões são `1 kg = 1.000 g` e `1 rolo = peso por unidade`. Para itens de unidade, somente `un` é aceito e a quantidade precisa ser inteira. O backend repete todas as regras de compatibilidade e rejeita operações incompatíveis antes da escrita transacional.
+
+O dashboard, a listagem de filamentos e o histórico exibem a unidade base apropriada. O resumo do dashboard separa o total em gramas do total em unidades para não somar grandezas diferentes. A prévia do modal mostra a quantidade convertida e o saldo resultante na unidade mais amigável.
+
+A migração aplicada é `drizzle/0003_spotty_psylocke.sql`. Ela adiciona colunas sem remover dados; o backfill do histórico copia os valores legados para os campos genéricos de saldo e quantidade. O fluxo de leitura também normaliza registros legados caso encontre uma linha ainda não preenchida. A validação final passou com **15 testes**, checagem TypeScript e build de produção. O CRUD rejeita saldos fracionados para itens por unidade; ajustes fracionados também são recusados antes de qualquer `update` ou `insert`.

@@ -22,6 +22,8 @@ const filamentInput = z.object({
   color: z.string().trim().min(1, "Informe a cor").max(80),
   brand: z.string().trim().min(1, "Informe a marca").max(120),
   diameter: z.enum(["1.75", "2.85"]),
+  baseUnit: z.enum(["weight", "unit"]).default("weight"),
+  weightPerUnit: z.number().int().positive("O peso por unidade precisa ser maior que zero").optional().nullable(),
   initialWeight: z.number().int().min(0, "O peso não pode ser negativo"),
   currentWeight: z.number().int().min(0, "O peso não pode ser negativo"),
   minimumWeight: z.number().int().min(0, "O estoque mínimo não pode ser negativo"),
@@ -29,16 +31,22 @@ const filamentInput = z.object({
   location: z.string().trim().min(1, "Informe a localização").max(120),
   status: z.enum(["available", "reserved", "finished"]),
   observation: z.string().trim().max(1000).optional().nullable(),
-}).refine(value => value.currentWeight <= value.initialWeight, {
+}).superRefine((value, ctx) => {
+  if (value.baseUnit === "unit" && value.weightPerUnit != null) ctx.addIssue({ code: "custom", path: ["weightPerUnit"], message: "Itens por unidade não usam peso por unidade" });
+  if (value.baseUnit === "weight" && value.weightPerUnit != null && value.weightPerUnit <= 0) ctx.addIssue({ code: "custom", path: ["weightPerUnit"], message: "O peso por unidade precisa ser maior que zero" });
+  if (value.currentWeight > value.initialWeight) ctx.addIssue({ code: "custom", path: ["currentWeight"], message: "O peso atual não pode ser maior que o peso inicial" });
+});
+/* legacy validation replaced above */
+/* .refine(value => value.currentWeight <= value.initialWeight, {
   message: "O peso atual não pode ser maior que o peso inicial",
   path: ["currentWeight"],
-});
+}); */
 
 async function notifyLowStock(filament: Filament): Promise<boolean> {
   try {
     return await notifyOwner({
       title: `Estoque baixo: ${filament.material} ${filament.color}`,
-      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} g disponíveis, no limite mínimo de ${filament.minimumWeight} g. Localização: ${filament.location}.`,
+      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} ${filament.baseUnit === "unit" ? "un" : "g"} disponíveis, no limite mínimo de ${filament.minimumWeight} ${filament.baseUnit === "unit" ? "un" : "g"}. Localização: ${filament.location}.`,
     });
   } catch (error) {
     console.warn("[Filaments] Could not send low-stock notification:", error);
@@ -49,15 +57,16 @@ async function notifyLowStock(filament: Filament): Promise<boolean> {
 const movementInput = z.object({
   filamentId: z.number().int().positive(),
   type: z.enum(["entry", "consumption", "loss", "adjustment", "reservation", "release_reservation"]),
-  quantityGrams: z.number().min(0).max(100000),
+  inputUnit: z.enum(["g", "kg", "roll", "unit"]),
+  inputQuantity: z.number().min(0).max(100000),
   adjustmentWeight: z.number().min(0).max(100000).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
 }).superRefine((value, ctx) => {
   if (value.type === "adjustment" && value.adjustmentWeight === undefined) {
     ctx.addIssue({ code: "custom", path: ["adjustmentWeight"], message: "Informe o novo peso real do rolo" });
   }
-  if (value.type !== "adjustment" && value.quantityGrams <= 0) {
-    ctx.addIssue({ code: "custom", path: ["quantityGrams"], message: "Informe uma quantidade maior que zero" });
+  if (value.type !== "adjustment" && value.inputQuantity <= 0) {
+    ctx.addIssue({ code: "custom", path: ["inputQuantity"], message: "Informe uma quantidade maior que zero" });
   }
 });
 
