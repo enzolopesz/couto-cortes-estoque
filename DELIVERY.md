@@ -81,3 +81,14 @@ Para itens de peso, o modal permite `g` e `kg`; `rolo` aparece somente quando `w
 O dashboard, a listagem de filamentos e o histórico exibem a unidade base apropriada. O resumo do dashboard separa o total em gramas do total em unidades para não somar grandezas diferentes. A prévia do modal mostra a quantidade convertida e o saldo resultante na unidade mais amigável.
 
 A migração aplicada é `drizzle/0003_spotty_psylocke.sql`. Ela adiciona colunas sem remover dados; o backfill do histórico copia os valores legados para os campos genéricos de saldo e quantidade. O fluxo de leitura também normaliza registros legados caso encontre uma linha ainda não preenchida. A validação final passou com **15 testes**, checagem TypeScript e build de produção. O CRUD rejeita saldos fracionados para itens por unidade; ajustes fracionados também são recusados antes de qualquer `update` ou `insert`.
+
+
+## Produtos internos e produção
+
+A etapa atual usa exclusivamente a tabela `inventory_products`; não existe consulta, alteração ou duplicação da tabela pública `products`. Cada produto interno possui `name`, `category`, `image_url`, `sku`, `active` e `external_product_id` opcional, reservado para futura sincronização. O estoque unitário fica em `product_inventory`, com `quantity_available`, `minimum_quantity` e `storage_location`. As produções ficam em `production_records`.
+
+A rota protegida `/estoque/produtos` oferece criação, edição, exclusão, busca, filtro por categoria, configuração de estoque em unidades inteiras e registro de produção. A confirmação executa uma transação que valida o material, baixa o filamento, cria a movimentação automática de consumo, registra a produção e aumenta o estoque do produto pronto. O dashboard mostra produtos prontos e produções recentes.
+
+### Roteiro de teste
+
+Cadastre um produto interno, por exemplo “Suporte de parede”, configure estoque mínimo `2 un` e localização “Prateleira C”. Depois selecione **Registrar produção**, escolha o produto, um filamento com saldo de `1.000 g`, informe `3` em quantidade produzida, `120` em consumo por unidade e `g` como unidade. A prévia deve mostrar `0 un → 3 un` no produto e `1.000 g → 640 g` no material. Ao confirmar, devem ser criados o registro de produção e o consumo, o estoque pronto deve subir para `3 un` e o filamento deve baixar para `640 g`. Qualquer saldo insuficiente ou unidade incompatível deve abortar toda a transação.

@@ -16,6 +16,7 @@ import {
   createStockMovement,
 } from "./db";
 import type { Filament } from "../drizzle/schema";
+import { createInventoryProduct, createProduction, deleteInventoryProduct, getInventoryProduct, getProductInventorySummary, listInventoryProducts, listProductionRecords, updateInventoryProduct, updateProductInventory } from "./products";
 
 const filamentInput = z.object({
   material: z.string().trim().min(1, "Informe o material").max(80),
@@ -68,6 +69,31 @@ const movementInput = z.object({
   if (value.type !== "adjustment" && value.inputQuantity <= 0) {
     ctx.addIssue({ code: "custom", path: ["inputQuantity"], message: "Informe uma quantidade maior que zero" });
   }
+});
+
+const productInput = z.object({
+  name: z.string().trim().min(1, "Informe o nome do produto").max(160),
+  category: z.string().trim().max(120).optional().nullable(),
+  imageUrl: z.string().url("Informe uma URL válida").optional().nullable(),
+  sku: z.string().trim().max(80).optional().nullable(),
+  externalProductId: z.string().trim().max(120).optional().nullable(),
+  active: z.boolean().default(true),
+});
+
+const productInventoryInput = z.object({
+  productId: z.string().uuid(),
+  quantityAvailable: z.number().int().min(0),
+  minimumQuantity: z.number().int().min(0),
+  storageLocation: z.string().trim().max(120).optional().nullable(),
+});
+
+const productionInput = z.object({
+  productId: z.string().uuid(),
+  filamentId: z.number().int().positive(),
+  quantityProduced: z.number().int().positive(),
+  quantityPerUnit: z.number().positive(),
+  unitUsed: z.enum(["g", "kg", "roll", "unit"]),
+  notes: z.string().trim().max(1000).optional().nullable(),
 });
 
 const movementRouter = router({
@@ -128,6 +154,23 @@ const filamentRouter = router({
     }),
 });
 
+const productsRouter = router({
+  list: protectedProcedure.query(({ ctx }) => listInventoryProducts(ctx.user.id)),
+  summary: protectedProcedure.query(({ ctx }) => getProductInventorySummary(ctx.user.id)),
+  create: protectedProcedure.input(productInput).mutation(({ ctx, input }) => createInventoryProduct({ ...input, ownerId: ctx.user.id })),
+  update: protectedProcedure.input(z.object({ id: z.string().uuid(), data: productInput })).mutation(({ ctx, input }) => updateInventoryProduct(input.id, ctx.user.id, { ...input.data, active: input.data.active })),
+  remove: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ ctx, input }) => deleteInventoryProduct(input.id, ctx.user.id)),
+  inventoryUpdate: protectedProcedure.input(productInventoryInput).mutation(({ ctx, input }) => updateProductInventory(input.productId, ctx.user.id, input.quantityAvailable, input.minimumQuantity, input.storageLocation)),
+  productions: protectedProcedure.query(({ ctx }) => listProductionRecords(ctx.user.id)),
+  produce: protectedProcedure.input(productionInput).mutation(async ({ ctx, input }) => {
+    try {
+      return await createProduction({ ...input, ownerId: ctx.user.id, createdBy: ctx.user.id });
+    } catch (error) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível registrar a produção" });
+    }
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -140,6 +183,7 @@ export const appRouter = router({
   }),
   filaments: filamentRouter,
   movements: movementRouter,
+  products: productsRouter,
 });
 
 export type AppRouter = typeof appRouter;

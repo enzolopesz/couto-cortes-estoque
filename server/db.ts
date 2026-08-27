@@ -11,6 +11,10 @@ export function resetDbForTests() {
   _db = null;
 }
 
+export function setDbForTests(db: ReturnType<typeof drizzle> | null) {
+  _db = db;
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {

@@ -15,7 +15,7 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Visão geral", path: "/estoque" },
   { icon: Boxes, label: "Filamentos", path: "/estoque/filamentos" },
   { icon: Wrench, label: "Movimentações", path: "/estoque/movimentacoes" },
-  { icon: Warehouse, label: "Produtos prontos", path: "#produtos-prontos", soon: true },
+  { icon: Warehouse, label: "Produtos prontos", path: "/estoque/produtos" },
   { icon: Settings2, label: "Configurações", path: "#configuracoes", soon: true },
 ];
 

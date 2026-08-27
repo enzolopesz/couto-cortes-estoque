@@ -69,3 +69,50 @@ export const stockMovements = mysqlTable("stock_movements", {
 
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type InsertStockMovement = typeof stockMovements.$inferInsert;
+
+/** Internal, independent catalog for finished products. */
+export const inventoryProducts = mysqlTable("inventory_products", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("ownerId").notNull().references(() => users.id),
+  name: varchar("name", { length: 160 }).notNull(),
+  category: varchar("category", { length: 120 }),
+  imageUrl: text("image_url"),
+  sku: varchar("sku", { length: 80 }),
+  externalProductId: varchar("external_product_id", { length: 120 }),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InventoryProduct = typeof inventoryProducts.$inferSelect;
+export type InsertInventoryProduct = typeof inventoryProducts.$inferInsert;
+
+export const productInventory = mysqlTable("product_inventory", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  productId: varchar("product_id", { length: 36 }).notNull().unique().references(() => inventoryProducts.id),
+  quantityAvailable: int("quantity_available").default(0).notNull(),
+  minimumQuantity: int("minimum_quantity").default(0).notNull(),
+  storageLocation: varchar("storage_location", { length: 120 }),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProductInventory = typeof productInventory.$inferSelect;
+export type InsertProductInventory = typeof productInventory.$inferInsert;
+
+export const productionRecords = mysqlTable("production_records", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
+  filamentId: int("filament_id").notNull().references(() => filaments.id),
+  quantityProduced: int("quantity_produced").notNull(),
+  quantityPerUnit: decimal("quantity_per_unit", { precision: 12, scale: 3 }).notNull(),
+  unitUsed: varchar("unit_used", { length: 12 }).notNull(),
+  totalConsumedBase: decimal("total_consumed_base", { precision: 12, scale: 2 }).notNull(),
+  notes: text("notes"),
+  createdBy: int("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProductionRecord = typeof productionRecords.$inferSelect;
+export type InsertProductionRecord = typeof productionRecords.$inferInsert;

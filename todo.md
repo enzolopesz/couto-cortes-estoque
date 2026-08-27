@@ -12,7 +12,7 @@
 - [x] Implementar indicador visual de estoque baixo com base no estoque mínimo
 - [x] Implementar confirmação antes da exclusão de filamentos
 - [x] Implementar notificação ao responsável quando o peso atingir ou ficar abaixo do estoque mínimo
-- [x] Manter Movimentações e Produtos prontos como itens Em breve, sem implementação nesta etapa
+- [x] Requisito histórico substituído: Movimentações e Produtos prontos foram implementados nas etapas seguintes
 - [x] Adicionar feedbacks de sucesso, erro e carregamento
 - [x] Validar testes unitários, build, rotas protegidas e responsividade
 - [x] Documentar tabelas criadas, rotas disponíveis e criação do primeiro usuário administrador
@@ -108,3 +108,59 @@
 - [x] Validar no create/update de filamentos que itens baseUnit=unit usem saldos inicial, atual e mínimo inteiros
 - [x] Adicionar teste executável que verifique a cópia dos valores legados para os campos genéricos do backfill
 - [x] Adicionar teste executável do mapeamento real da migração, comprovando cópia de quantityGrams, previousWeightGrams e resultingWeightGrams
+
+## Nova etapa: produtos prontos e produção
+
+- [x] Mapear a tabela de catálogo `products` sem alterar dados comerciais ou funcionamento público
+- [x] Criar tabela complementar `product_inventory` com estoque mínimo, saldo em unidades e localização
+- [x] Criar tabela complementar `production_records` com produto, material, consumo, unidade e usuário
+- [x] Implementar isolamento por usuário para inventário, produção e operações protegidas
+- [x] Implementar transação atômica que baixa material, cria consumo, registra produção e aumenta produto pronto
+- [x] Requisito substituído: cadastro interno independente em `inventory_products`, sem acesso ao catálogo público
+- [x] Ativar menu Produtos prontos e criar rota protegida /estoque/produtos
+- [x] Criar listagem com imagem, nome, categoria, saldo, mínimo, localização, status, busca e filtro
+- [x] Criar configuração de estoque mínimo e localização sem editar dados comerciais
+- [x] Criar modal Registrar produção com unidade compatível, total consumido e prévia dos dois saldos
+- [x] Permitir produção apenas com quantidade inteira positiva em unidades
+- [x] Respeitar conversões g, kg, rolo e un do material selecionado
+- [x] Atualizar dashboard com total de produtos, alertas e últimas produções
+- [x] Atualizar telas automaticamente após produção sem recarregar
+- [x] Corrigir overflow horizontal e manter dropdowns/menus/calendários no dark mode
+- [x] Adicionar testes de transação, saldo negativo, isolamento, unidade e preservação do catálogo
+- [x] Documentar o roteiro de teste: produzir 3 peças consumindo 120 g por peça de um filamento com 1.000 g
+
+## Nova etapa: produtos internos independentes
+
+- [x] Criar tabela `inventory_products` sem usar o nome `products`
+- [x] Adicionar name, category, image_url, sku/code, active, external_product_id e timestamps
+- [x] Ajustar `product_inventory` para referenciar `inventory_products`
+- [x] Ajustar `production_records` para referenciar `inventory_products`
+- [x] Preservar a separação completa do catálogo público sem consultas ou alterações
+- [x] Implementar CRUD protegido de produtos internos
+- [x] Implementar estoque de produtos prontos sempre em unidades inteiras
+- [x] Integrar produção ao produto interno e ao filamento em transação atômica
+- [x] Adicionar busca, filtro, foto opcional, SKU e configuração de mínimo/localização
+- [x] Atualizar dashboard e telas após produção sem recarregar
+- [x] Adicionar testes de CRUD, isolamento, unidades inteiras, transação e não acesso ao catálogo público
+- [x] Atualizar documentação com o modelo independente e roteiro de teste de produção
+
+## Revisão pós-implementação de produtos internos
+
+- [x] Marcar o requisito de integração com catálogo público como substituído pelo cadastro interno independente, sem considerá-lo entregue
+- [x] Verificar sucesso do update de product_inventory dentro da transação e forçar rollback se nenhuma linha for atualizada
+- [x] Invalidar products.summary após produção para atualizar o dashboard sem refresh
+- [x] Adicionar testes reais de CRUD, isolamento por usuário, rollback transacional e independência do catálogo público
+- [x] Validar estados mobile/desktop e modais de Produtos prontos sem overflow horizontal
+
+## Revisão final de produtos internos
+
+- [x] Adicionar teste transacional real de createProduction com driver controlado e rollback quando o update final falhar
+- [x] Adicionar teste de produção com material insuficiente que não execute escritas
+- [x] Adicionar testes de isolamento por usuário em list, update, inventoryUpdate e produce
+
+## Cobertura final de produtos internos
+
+- [x] Adicionar testes reais de CRUD de produtos internos cobrindo create, list, update e remove com sucesso
+- [x] Adicionar testes de isolamento por usuário para list, update, inventoryUpdate e produce com ownerId distinto
+- [x] Validar explicitamente os modais de cadastro, estoque e produção em desktop e mobile sem overflow
+- [x] Validar visualmente com os modais abertos os fluxos de cadastro, estoque e produção em desktop e mobile; manter pendente até haver evidência direta
