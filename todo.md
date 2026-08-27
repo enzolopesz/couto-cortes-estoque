@@ -187,3 +187,19 @@
 - [x] Validar formulário em desktop/mobile e salvar checkpoint do ajuste
 - [x] Validar visualmente o modal Novo filamento em desktop e mobile nos estados kg, Quantidade/un e Comprimento/m, confirmando labels dinâmicos e ausência de overflow
 - [x] Salvar novo checkpoint após concluir a validação visual completa deste ajuste
+
+## Nova etapa: ficha técnica com múltiplos materiais por produto
+
+- [x] Criar tabela relacional `product_materials` sem adicionar materiais como colunas em produtos
+- [x] Relacionar ficha técnica a `inventory_products` e `filaments`, com escopo por owner
+- [x] Persistir quantidade_base na unidade interna compatível: g, m ou un
+- [x] Adicionar estoque inicial e estoque mínimo inteiros no modal Novo produto interno
+- [x] Permitir múltiplas linhas de materiais, inclusão, exclusão e selects dependentes
+- [x] Salvar e editar a ficha técnica sem alterar saldos de filamentos
+- [x] Manter produção fora do escopo e não alterar catálogo público
+- [x] Adicionar validações, testes e documentação
+- [x] Validar dark mode, responsividade, TypeScript, testes e build; salvar checkpoint
+- [x] Validar novamente em desktop e mobile o modal final limpo; composição preenchida coberta por testes, sem criar dados artificiais na sessão
+- [ ] Salvar um novo checkpoint após concluir esta etapa da ficha técnica com múltiplos materiais
+- [ ] Validar em desktop e mobile o modal final limpo com um produto real contendo múltiplas linhas de materiais, sem código temporário de preview, e registrar a evidência
+- [ ] Usuário validar pela interface real a ficha técnica preenchida com os filamentos persistidos, sem criação de dados artificiais nesta sessão

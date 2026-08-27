@@ -92,3 +92,12 @@ A rota protegida `/estoque/produtos` oferece criação, edição, exclusão, bus
 ### Roteiro de teste
 
 Cadastre um produto interno, por exemplo “Suporte de parede”, e configure estoque mínimo `2 un`. Depois selecione **Registrar produção**, escolha o produto, um filamento com saldo de `1.000 g`, informe `3` em quantidade produzida, `120` em consumo por unidade e `g` como unidade. A prévia deve mostrar `0 un → 3 un` no produto e `1.000 g → 640 g` no material. Ao confirmar, devem ser criados o registro de produção e o consumo, o estoque pronto deve subir para `3 un` e o filamento deve baixar para `640 g`. Qualquer saldo insuficiente ou unidade incompatível deve abortar toda a transação.
+
+
+## Ficha técnica de produtos internos
+
+O cadastro de produtos internos agora aceita estoque inicial e estoque mínimo em unidades inteiras não negativas, além de uma seção **Materiais utilizados** com várias linhas. Cada linha referencia um filamento por ID, recebe uma quantidade decimal positiva por unidade produzida e oferece apenas as unidades compatíveis com o tipo de controle do filamento: `g`/`kg` para Peso, `m` para Comprimento e `un` para Quantidade.
+
+A composição é persistida na tabela relacional `product_materials`, com `product_id`, `filament_id`, `quantity_base` e `unit_type`. Pesos informados em quilogramas são convertidos para gramas antes da gravação; comprimentos permanecem em metros e quantidades em unidades. Criar ou editar um produto apenas grava a ficha técnica e não altera saldos de filamentos. O fluxo de produção existente não foi substituído nem expandido nesta etapa e continua separado para uma futura adaptação que consuma a ficha técnica completa.
+
+A migração `drizzle/0008_cultured_scourge.sql` cria a tabela sem remover ou alterar dados existentes. A API protegida valida o proprietário do produto e de cada filamento antes de salvar a composição, substitui todas as linhas em uma edição e remove as linhas relacionadas antes da exclusão do produto interno.

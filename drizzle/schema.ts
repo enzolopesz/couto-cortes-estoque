@@ -87,6 +87,20 @@ export const inventoryProducts = mysqlTable("inventory_products", {
 export type InventoryProduct = typeof inventoryProducts.$inferSelect;
 export type InsertInventoryProduct = typeof inventoryProducts.$inferInsert;
 
+export const productMaterials = mysqlTable("product_materials", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
+  filamentId: int("filament_id").notNull().references(() => filaments.id),
+  quantityBase: decimal("quantity_base", { precision: 12, scale: 3 }).notNull(),
+  unitType: mysqlEnum("unit_type", ["g", "m", "unit"]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ProductMaterial = typeof productMaterials.$inferSelect;
+export type InsertProductMaterial = typeof productMaterials.$inferInsert;
+
 export const productInventory = mysqlTable("product_inventory", {
   id: varchar("id", { length: 36 }).primaryKey(),
   ownerId: int("owner_id").notNull().references(() => users.id),

@@ -57,6 +57,13 @@
       "when": 1787869645493,
       "tag": "0007_adorable_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787871257116,
+      "tag": "0008_cultured_scourge",
+      "breakpoints": true
     }
   ]
 }

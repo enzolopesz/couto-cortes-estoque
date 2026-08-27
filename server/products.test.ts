@@ -134,3 +134,21 @@ describe("internal products and production", () => {
     await expect(caller.products.produce({ productId: "00000000-0000-0000-0000-000000000009", filamentId: 1, quantityProduced: 0, quantityPerUnit: 120, unitUsed: "g", notes: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
+
+
+describe("product material composition", () => {
+  it("converts weight composition from kg to grams without changing other units", async () => {
+    const { compatibleProductMaterialUnits, convertProductMaterialToBase } = await import("./products");
+    expect(compatibleProductMaterialUnits("weight")).toEqual(["g", "kg"]);
+    expect(convertProductMaterialToBase(0.3, "kg", "weight")).toEqual({ quantityBase: 300, unitType: "g" });
+    expect(convertProductMaterialToBase(300, "g", "weight")).toEqual({ quantityBase: 300, unitType: "g" });
+    expect(convertProductMaterialToBase(0.5, "m", "length")).toEqual({ quantityBase: 0.5, unitType: "m" });
+  });
+
+  it("exposes only the unit compatible with quantity-controlled filaments", async () => {
+    const { compatibleProductMaterialUnits, convertProductMaterialToBase } = await import("./products");
+    expect(compatibleProductMaterialUnits("unit")).toEqual(["unit"]);
+    expect(() => convertProductMaterialToBase(1, "kg", "unit")).toThrow("compatível");
+    expect(convertProductMaterialToBase(2.5, "unit", "unit")).toEqual({ quantityBase: 2.5, unitType: "unit" });
+  });
+});

@@ -16,7 +16,9 @@ import {
   createStockMovement,
 } from "./db";
 import type { Filament } from "../drizzle/schema";
-import { createInventoryProduct, createProduction, deleteInventoryProduct, getInventoryProduct, getProductInventorySummary, listInventoryProducts, listProductionRecords, updateInventoryProduct, updateProductInventory } from "./products";
+import { createInventoryProduct, createProduction, deleteInventoryProduct, getInventoryProduct, getProductInventorySummary, listInventoryProducts,   listProductionRecords,
+  listProductMaterials,
+  updateInventoryProduct, updateProductInventory } from "./products";
 
 const filamentInput = z.object({
   material: z.string().trim().min(1, "Informe o material").max(80),
@@ -86,6 +88,12 @@ const movementInput = z.object({
   }
 });
 
+const productMaterialInput = z.object({
+  filamentId: z.number().int().positive(),
+  quantity: z.number().finite().positive(),
+  unit: z.enum(["g", "kg", "m", "unit"]),
+});
+
 const productInput = z.object({
   name: z.string().trim().min(1, "Informe o nome do produto").max(160),
   category: z.string().trim().max(120).optional().nullable(),
@@ -93,6 +101,9 @@ const productInput = z.object({
   sku: z.string().trim().max(80).optional().nullable(),
   externalProductId: z.string().trim().max(120).optional().nullable(),
   active: z.boolean().default(true),
+  quantityAvailable: z.number().int().min(0).optional(),
+  minimumQuantity: z.number().int().min(0).optional(),
+  materials: z.array(productMaterialInput).max(100).optional(),
 });
 
 const productInventoryInput = z.object({
@@ -173,6 +184,7 @@ const filamentRouter = router({
 const productsRouter = router({
   list: protectedProcedure.query(({ ctx }) => listInventoryProducts(ctx.user.id)),
   summary: protectedProcedure.query(({ ctx }) => getProductInventorySummary(ctx.user.id)),
+  materials: protectedProcedure.input(z.object({ productId: z.string().uuid() })).query(({ ctx, input }) => listProductMaterials(input.productId, ctx.user.id)),
   create: protectedProcedure.input(productInput).mutation(({ ctx, input }) => createInventoryProduct({ ...input, ownerId: ctx.user.id })),
   update: protectedProcedure.input(z.object({ id: z.string().uuid(), data: productInput })).mutation(({ ctx, input }) => updateInventoryProduct(input.id, ctx.user.id, { ...input.data, active: input.data.active })),
   remove: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ ctx, input }) => deleteInventoryProduct(input.id, ctx.user.id)),

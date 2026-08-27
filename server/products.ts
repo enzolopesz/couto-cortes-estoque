@@ -1,8 +1,10 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { inventoryProducts, productInventory, productionRecords, filaments, stockMovements, users } from "../drizzle/schema";
+import { inventoryProducts, productInventory, productMaterials, productionRecords, filaments, stockMovements, users } from "../drizzle/schema";
 import { calculateMovementResult, convertMovementToBase, getDb } from "./db";
 
+export type MaterialUnit = "g" | "kg" | "m" | "unit";
+export type ProductMaterialInput = { filamentId: number; quantity: number; unit: MaterialUnit };
 export type ProductInput = {
   ownerId: number;
   name: string;
@@ -11,7 +13,34 @@ export type ProductInput = {
   sku?: string | null;
   externalProductId?: string | null;
   active?: boolean;
+  quantityAvailable?: number;
+  minimumQuantity?: number;
+  materials?: ProductMaterialInput[];
 };
+
+export function compatibleProductMaterialUnits(baseUnit: "weight" | "unit" | "length"): MaterialUnit[] {
+  return baseUnit === "weight" ? ["g", "kg"] : baseUnit === "length" ? ["m"] : ["unit"];
+}
+
+export function convertProductMaterialToBase(quantity: number, unit: MaterialUnit, baseUnit: "weight" | "unit" | "length") {
+  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("A quantidade consumida precisa ser maior que zero");
+  if (!compatibleProductMaterialUnits(baseUnit).includes(unit)) throw new Error("A unidade do material não é compatível com o tipo de controle do filamento");
+  const quantityBase = baseUnit === "weight" && unit === "kg" ? quantity * 1000 : quantity;
+  if (!Number.isFinite(quantityBase) || Math.abs(quantityBase - Number(quantityBase.toFixed(3))) > 1e-9) throw new Error("A quantidade precisa ter no máximo três casas decimais na unidade interna");
+  return { quantityBase: Number(quantityBase.toFixed(3)), unitType: (baseUnit === "weight" ? "g" : baseUnit === "length" ? "m" : "unit") as "g" | "m" | "unit" };
+}
+
+async function normalizeProductMaterials(tx: any, ownerId: number, materials: ProductMaterialInput[] | undefined) {
+  if (materials === undefined) return undefined;
+  const normalized: Array<{ ownerId: number; productId: string; filamentId: number; quantityBase: number; unitType: "g" | "m" | "unit" }> = [];
+  for (const material of materials) {
+    const [filament] = await tx.select().from(filaments).where(and(eq(filaments.id, material.filamentId), eq(filaments.ownerId, ownerId))).limit(1);
+    if (!filament || filament.ownerId !== ownerId) throw new Error("Um dos filamentos selecionados não pertence ao proprietário atual");
+    const converted = convertProductMaterialToBase(material.quantity, material.unit, filament.baseUnit);
+    normalized.push({ ownerId, productId: "", filamentId: material.filamentId, ...converted });
+  }
+  return normalized;
+}
 
 export async function listInventoryProducts(ownerId: number) {
   const db = await getDb();
@@ -33,6 +62,12 @@ export async function listInventoryProducts(ownerId: number) {
     .leftJoin(productInventory, eq(productInventory.productId, inventoryProducts.id))
     .where(eq(inventoryProducts.ownerId, ownerId))
     .orderBy(asc(inventoryProducts.name)).then(rows => rows.filter(row => row.ownerId === ownerId));
+}
+
+export async function listProductMaterials(productId: string, ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  return db.select({ id: productMaterials.id, productId: productMaterials.productId, filamentId: filaments.id, filamentMaterial: filaments.material, filamentBrand: filaments.brand, filamentColor: filaments.color, filamentDiameter: filaments.diameter, quantityBase: productMaterials.quantityBase, unitType: productMaterials.unitType }).from(productMaterials).innerJoin(inventoryProducts, eq(productMaterials.productId, inventoryProducts.id)).innerJoin(filaments, eq(productMaterials.filamentId, filaments.id)).where(and(eq(productMaterials.productId, productId), eq(productMaterials.ownerId, ownerId), eq(inventoryProducts.ownerId, ownerId))).orderBy(asc(productMaterials.createdAt));
 }
 
 export async function getInventoryProduct(id: string, ownerId: number) {
@@ -71,7 +106,9 @@ export async function createInventoryProduct(input: ProductInput) {
       externalProductId: input.externalProductId || null,
       active: input.active === false ? 0 : 1,
     });
-    await tx.insert(productInventory).values({ id: randomUUID(), ownerId: input.ownerId, productId: id, quantityAvailable: 0, minimumQuantity: 0 });
+    await tx.insert(productInventory).values({ id: randomUUID(), ownerId: input.ownerId, productId: id, quantityAvailable: input.quantityAvailable ?? 0, minimumQuantity: input.minimumQuantity ?? 0 });
+    const materials = await normalizeProductMaterials(tx, input.ownerId, input.materials);
+    if (materials?.length) await tx.insert(productMaterials).values(materials.map(material => ({ ...material, id: randomUUID(), productId: id, quantityBase: material.quantityBase.toFixed(3) })));
   });
   return getInventoryProduct(id, input.ownerId);
 }
@@ -81,7 +118,17 @@ export async function updateInventoryProduct(id: string, ownerId: number, input:
   if (!db) throw new Error("Database is not configured");
   const existing = await getInventoryProduct(id, ownerId);
   if (!existing) return undefined;
-  await db.update(inventoryProducts).set({ name: input.name, category: input.category || null, imageUrl: input.imageUrl || null, sku: input.sku || null, externalProductId: input.externalProductId || null, active: input.active === false ? 0 : 1, updatedAt: new Date() }).where(and(eq(inventoryProducts.id, id), eq(inventoryProducts.ownerId, ownerId)));
+  await db.transaction(async tx => {
+    await tx.update(inventoryProducts).set({ name: input.name, category: input.category || null, imageUrl: input.imageUrl || null, sku: input.sku || null, externalProductId: input.externalProductId || null, active: input.active === false ? 0 : 1, updatedAt: new Date() }).where(and(eq(inventoryProducts.id, id), eq(inventoryProducts.ownerId, ownerId)));
+    if (input.quantityAvailable !== undefined || input.minimumQuantity !== undefined) {
+      await tx.update(productInventory).set({ quantityAvailable: input.quantityAvailable ?? Number(existing.quantityAvailable ?? 0), minimumQuantity: input.minimumQuantity ?? Number(existing.minimumQuantity ?? 0), updatedAt: new Date() }).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId)));
+    }
+    if (input.materials !== undefined) {
+      const materials = (await normalizeProductMaterials(tx, ownerId, input.materials)) ?? [];
+      await tx.delete(productMaterials).where(and(eq(productMaterials.productId, id), eq(productMaterials.ownerId, ownerId)));
+      if (materials.length) await tx.insert(productMaterials).values(materials.map(material => ({ ...material, id: randomUUID(), productId: id, quantityBase: material.quantityBase.toFixed(3) })));
+    }
+  });
   return getInventoryProduct(id, ownerId);
 }
 
@@ -90,6 +137,7 @@ export async function deleteInventoryProduct(id: string, ownerId: number) {
   if (!db) throw new Error("Database is not configured");
   const existing = await getInventoryProduct(id, ownerId);
   if (!existing) return false;
+  await db.delete(productMaterials).where(and(eq(productMaterials.productId, id), eq(productMaterials.ownerId, ownerId)));
   await db.delete(productInventory).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId)));
   await db.delete(inventoryProducts).where(and(eq(inventoryProducts.id, id), eq(inventoryProducts.ownerId, ownerId)));
   return true;
