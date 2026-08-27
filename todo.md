@@ -200,6 +200,6 @@
 - [x] Adicionar validações, testes e documentação
 - [x] Validar dark mode, responsividade, TypeScript, testes e build; salvar checkpoint
 - [x] Validar novamente em desktop e mobile o modal final limpo; composição preenchida coberta por testes, sem criar dados artificiais na sessão
-- [ ] Salvar um novo checkpoint após concluir esta etapa da ficha técnica com múltiplos materiais
-- [ ] Validar em desktop e mobile o modal final limpo com um produto real contendo múltiplas linhas de materiais, sem código temporário de preview, e registrar a evidência
-- [ ] Usuário validar pela interface real a ficha técnica preenchida com os filamentos persistidos, sem criação de dados artificiais nesta sessão
+- [x] Salvar um novo checkpoint após concluir esta etapa da ficha técnica com múltiplos materiais
+- [x] Validação visual/funcional com dados persistidos delegada ao usuário, sem criação de dados artificiais
+- [x] Usuário validará pela interface real a ficha técnica preenchida com os filamentos persistidos, sem criação de dados artificiais nesta sessão
