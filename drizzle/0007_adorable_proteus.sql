@@ -1,0 +1,1 @@
+ALTER TABLE `stock_movements` MODIFY COLUMN `inputUnit` enum('g','kg','roll','unit','m') NOT NULL DEFAULT 'g';

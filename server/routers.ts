@@ -23,18 +23,24 @@ const filamentInput = z.object({
   color: z.string().trim().min(1, "Informe a cor").max(80),
   brand: z.string().trim().min(1, "Informe a marca").max(120),
   diameter: z.enum(["1.75", "2.85"]),
-  baseUnit: z.enum(["weight", "unit"]).default("weight"),
-  weightPerUnit: z.number().int().positive("O peso por unidade precisa ser maior que zero").optional().nullable(),
-  initialWeight: z.number().int().min(0, "O peso não pode ser negativo"),
-  currentWeight: z.number().int().min(0, "O peso não pode ser negativo"),
-  minimumWeight: z.number().int().min(0, "O estoque mínimo não pode ser negativo"),
+  baseUnit: z.enum(["weight", "unit", "length"]).default("weight"),
+  measurementUnit: z.enum(["g", "kg", "unit", "m"]).optional(),
+  weightPerUnit: z.number().finite().positive("O peso por unidade precisa ser maior que zero").optional().nullable(),
+  initialWeight: z.number().finite().min(0, "O saldo inicial não pode ser negativo"),
+  currentWeight: z.number().finite().min(0, "O saldo disponível não pode ser negativo"),
+  minimumWeight: z.number().finite().min(0, "O estoque mínimo não pode ser negativo"),
   rollCost: z.number().min(0, "O custo não pode ser negativo"),
   status: z.enum(["available", "reserved", "finished"]),
   observation: z.string().trim().max(1000).optional().nullable(),
 }).superRefine((value, ctx) => {
-  if (value.baseUnit === "unit" && value.weightPerUnit != null) ctx.addIssue({ code: "custom", path: ["weightPerUnit"], message: "Itens por unidade não usam peso por unidade" });
+  const measurementUnit = value.measurementUnit ?? (value.baseUnit === "weight" ? "g" : value.baseUnit === "unit" ? "unit" : "m");
+  const compatibleUnit = value.baseUnit === "weight" ? ["g", "kg"] : value.baseUnit === "unit" ? ["unit"] : ["m"];
+  if (!compatibleUnit.includes(measurementUnit)) ctx.addIssue({ code: "custom", path: ["measurementUnit"], message: "A unidade de medida não é compatível com o tipo de controle" });
+  const toStorage = (amount: number) => measurementUnit === "kg" ? amount * 1000 : amount;
+  if (![toStorage(value.initialWeight), toStorage(value.currentWeight), toStorage(value.minimumWeight), value.weightPerUnit == null ? null : toStorage(value.weightPerUnit)].every(amount => amount == null || Number.isInteger(amount))) ctx.addIssue({ code: "custom", path: ["measurementUnit"], message: "Os valores precisam resultar em números inteiros na unidade interna" });
+  if (value.baseUnit !== "weight" && value.weightPerUnit != null) ctx.addIssue({ code: "custom", path: ["weightPerUnit"], message: "Somente itens controlados por peso usam peso por unidade" });
   if (value.baseUnit === "weight" && value.weightPerUnit != null && value.weightPerUnit <= 0) ctx.addIssue({ code: "custom", path: ["weightPerUnit"], message: "O peso por unidade precisa ser maior que zero" });
-  if (value.currentWeight > value.initialWeight) ctx.addIssue({ code: "custom", path: ["currentWeight"], message: "O peso atual não pode ser maior que o peso inicial" });
+  if (value.currentWeight > value.initialWeight) ctx.addIssue({ code: "custom", path: ["currentWeight"], message: "O saldo disponível não pode ser maior que o saldo inicial" });
 });
 /* legacy validation replaced above */
 /* .refine(value => value.currentWeight <= value.initialWeight, {
@@ -42,11 +48,21 @@ const filamentInput = z.object({
   path: ["currentWeight"],
 }); */
 
+export function normalizeFilamentInput(input: z.infer<typeof filamentInput>) {
+  const measurementUnit = input.measurementUnit ?? (input.baseUnit === "weight" ? "g" : input.baseUnit === "unit" ? "unit" : "m");
+  const toStorage = (amount: number) => measurementUnit === "kg" ? amount * 1000 : amount;
+  return { ...input, measurementUnit, weightPerUnit: input.baseUnit === "weight" && input.weightPerUnit != null ? toStorage(input.weightPerUnit) : null, initialWeight: toStorage(input.initialWeight), currentWeight: toStorage(input.currentWeight), minimumWeight: toStorage(input.minimumWeight) };
+}
+
 async function notifyLowStock(filament: Filament): Promise<boolean> {
   try {
+    const unit = filament.baseUnit === "unit" ? "un" : filament.baseUnit === "length" ? "m" : filament.measurementUnit === "kg" ? "kg" : "g";
+    const divisor = filament.baseUnit === "weight" && filament.measurementUnit === "kg" ? 1000 : 1;
+    const current = Number(filament.currentWeight) / divisor;
+    const minimum = Number(filament.minimumWeight) / divisor;
     return await notifyOwner({
       title: `Estoque baixo: ${filament.material} ${filament.color}`,
-      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} ${filament.baseUnit === "unit" ? "un" : "g"} disponíveis, no limite mínimo de ${filament.minimumWeight} ${filament.baseUnit === "unit" ? "un" : "g"}.`,
+      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${current} ${unit} disponíveis, no limite mínimo de ${minimum} ${unit}.`,
     });
   } catch (error) {
     console.warn("[Filaments] Could not send low-stock notification:", error);
@@ -57,7 +73,7 @@ async function notifyLowStock(filament: Filament): Promise<boolean> {
 const movementInput = z.object({
   filamentId: z.number().int().positive(),
   type: z.enum(["entry", "consumption", "loss", "adjustment", "reservation", "release_reservation"]),
-  inputUnit: z.enum(["g", "kg", "roll", "unit"]),
+  inputUnit: z.enum(["g", "kg", "roll", "unit", "m"]),
   inputQuantity: z.number().min(0).max(100000),
   adjustmentWeight: z.number().min(0).max(100000).optional(),
   description: z.string().trim().max(1000).optional().nullable(),
@@ -90,7 +106,7 @@ const productionInput = z.object({
   filamentId: z.number().int().positive(),
   quantityProduced: z.number().int().positive(),
   quantityPerUnit: z.number().positive(),
-  unitUsed: z.enum(["g", "kg", "roll", "unit"]),
+  unitUsed: z.enum(["g", "kg", "roll", "unit", "m"]),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -111,8 +127,9 @@ const filamentRouter = router({
   summary: protectedProcedure.query(({ ctx }) => getInventorySummary(ctx.user.id)),
 
   create: protectedProcedure.input(filamentInput).mutation(async ({ ctx, input }) => {
+    const normalized = normalizeFilamentInput(input);
     const created = await createFilament({
-      ...input,
+      ...normalized,
       ownerId: ctx.user.id,
       diameter: input.diameter,
       rollCost: input.rollCost.toFixed(2),
@@ -130,8 +147,9 @@ const filamentRouter = router({
       const previous = await getFilamentById(input.id, ctx.user.id);
       if (!previous) return null;
 
+      const normalized = normalizeFilamentInput(input.data);
       const updated = await updateFilament(input.id, ctx.user.id, {
-        ...input.data,
+        ...normalized,
         diameter: input.data.diameter,
         rollCost: input.data.rollCost.toFixed(2),
         observation: input.data.observation || null,

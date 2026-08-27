@@ -191,22 +191,28 @@ export async function listStockMovementsByOwner(ownerId: number) {
 }
 
 export type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
-export type BaseUnit = "weight" | "unit";
-export type InputUnit = "g" | "kg" | "roll" | "unit";
+export type BaseUnit = "weight" | "unit" | "length";
+export type InputUnit = "g" | "kg" | "roll" | "unit" | "m";
 
 export function compatibleMovementUnits(baseUnit: BaseUnit, weightPerUnit?: number | null): InputUnit[] {
   if (baseUnit === "unit") return ["unit"];
+  if (baseUnit === "length") return ["m"];
   return weightPerUnit && weightPerUnit > 0 ? ["g", "kg", "roll"] : ["g", "kg"];
 }
 
 export function convertMovementToBase(inputQuantity: number, inputUnit: InputUnit, baseUnit: BaseUnit, weightPerUnit?: number | null) {
   if (!Number.isFinite(inputQuantity) || inputQuantity <= 0) throw new Error("A quantidade precisa ser maior que zero");
   if (baseUnit === "unit") {
-    if (inputUnit !== "unit") throw new Error("Itens controlados por unidade não aceitam g, kg ou rolo; use un");
-    if (!Number.isInteger(inputQuantity)) throw new Error("Itens controlados por unidade aceitam somente números inteiros em un");
+    if (inputUnit !== "unit") throw new Error("Itens controlados por quantidade não aceitam g, kg, rolo ou m; use un");
+    if (!Number.isInteger(inputQuantity)) throw new Error("Itens controlados por quantidade aceitam somente números inteiros em un");
     return inputQuantity;
   }
-  if (inputUnit === "unit") throw new Error("Itens controlados por peso não aceitam unidade");
+  if (baseUnit === "length") {
+    if (inputUnit !== "m") throw new Error("Itens controlados por comprimento aceitam somente m");
+    if (!Number.isInteger(inputQuantity)) throw new Error("Itens controlados por comprimento aceitam somente números inteiros em m");
+    return inputQuantity;
+  }
+  if (inputUnit === "unit" || inputUnit === "m") throw new Error("Itens controlados por peso não aceitam un ou m");
   if (inputUnit === "roll" && (!weightPerUnit || weightPerUnit <= 0)) throw new Error("Este item não possui peso por rolo configurado");
   const grams = inputUnit === "kg" ? inputQuantity * 1000 : inputUnit === "roll" ? inputQuantity * Number(weightPerUnit) : inputQuantity;
   if (!Number.isFinite(grams) || grams <= 0) throw new Error("A conversão da quantidade é inválida");
@@ -249,7 +255,7 @@ export async function createStockMovement(input: {
     const adjustmentWeight = Number(input.adjustmentWeight);
     if (input.type === "adjustment") {
       if (!Number.isFinite(adjustmentWeight) || adjustmentWeight < 0) throw new Error("O saldo real informado é inválido");
-      if (filament.baseUnit === "unit" && !Number.isInteger(adjustmentWeight)) throw new Error("Itens controlados por unidade aceitam somente números inteiros em un");
+      if (filament.baseUnit !== "weight" && !Number.isInteger(adjustmentWeight)) throw new Error(filament.baseUnit === "length" ? "Itens controlados por comprimento aceitam somente números inteiros em m" : "Itens controlados por quantidade aceitam somente números inteiros em un");
     }
     const quantityBase = input.type === "adjustment"
       ? adjustmentWeight
@@ -265,7 +271,7 @@ export async function createStockMovement(input: {
           : filament.status;
     const updateResult = await tx
       .update(filaments)
-      .set({ currentWeight: filament.baseUnit === "unit" ? resulting : Math.round(resulting), status: nextStatus, updatedAt: new Date() })
+      .set({ currentWeight: Math.round(resulting), status: nextStatus, updatedAt: new Date() })
       .where(and(eq(filaments.id, input.filamentId), eq(filaments.ownerId, input.ownerId), eq(filaments.currentWeight, filament.currentWeight)));
     const affectedRows = Number((updateResult as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0);
     if (affectedRows !== 1) throw new Error("O saldo foi alterado por outra operação. Atualize e tente novamente");
@@ -278,7 +284,7 @@ export async function createStockMovement(input: {
       quantityGrams: filament.baseUnit === "weight" ? effectiveQuantity.toFixed(2) : "0",
       previousWeightGrams: filament.baseUnit === "weight" ? previous.toFixed(2) : "0",
       resultingWeightGrams: filament.baseUnit === "weight" ? resulting.toFixed(2) : "0",
-      inputUnit: input.type === "adjustment" ? filament.baseUnit === "unit" ? "unit" : "g" : input.inputUnit,
+      inputUnit: input.type === "adjustment" ? filament.baseUnit === "unit" ? "unit" : filament.baseUnit === "length" ? "m" : "g" : input.inputUnit,
       inputQuantity: input.type === "adjustment" ? effectiveQuantity.toFixed(3) : input.inputQuantity.toFixed(3),
       quantityBase: filament.baseUnit === "unit" ? effectiveQuantity.toFixed(0) : effectiveQuantity.toFixed(2),
       previousBalance: filament.baseUnit === "unit" ? previous.toFixed(0) : previous.toFixed(2),

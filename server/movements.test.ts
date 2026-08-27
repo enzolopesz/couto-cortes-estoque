@@ -48,11 +48,14 @@ describe("movements", () => {
     expect(compatibleMovementUnits("weight", 1000)).toEqual(["g", "kg", "roll"]);
     expect(compatibleMovementUnits("weight", null)).toEqual(["g", "kg"]);
     expect(compatibleMovementUnits("unit", null)).toEqual(["unit"]);
+    expect(compatibleMovementUnits("length", null)).toEqual(["m"]);
     expect(convertMovementToBase(2, "kg", "weight", null)).toBe(2000);
     expect(convertMovementToBase(2, "roll", "weight", 1000)).toBe(2000);
     expect(convertMovementToBase(3, "unit", "unit", null)).toBe(3);
+    expect(convertMovementToBase(4, "m", "length", null)).toBe(4);
     expect(() => convertMovementToBase(2.5, "unit", "unit", null)).toThrow("números inteiros");
-    expect(() => convertMovementToBase(2, "g", "unit", null)).toThrow("não aceitam g, kg ou rolo");
+    expect(() => convertMovementToBase(2.5, "m", "length", null)).toThrow("números inteiros");
+    expect(() => convertMovementToBase(2, "g", "unit", null)).toThrow("não aceitam g, kg, rolo ou m");
     expect(() => convertMovementToBase(2, "roll", "weight", null)).toThrow("peso por rolo");
   });
 
@@ -98,7 +101,7 @@ describe("movements", () => {
     expect(result.resultingWeight).toBe(7);
     expect(fakeState.operations).toEqual(["update-unit-filament", "insert-unit-movement"]);
     fakeState.operations = [];
-    await expect(createStockMovement({ ownerId: 7, createdBy: 7, filamentId: 13, type: "entry", inputUnit: "g", inputQuantity: 100 })).rejects.toThrow("não aceitam g, kg ou rolo");
+    await expect(createStockMovement({ ownerId: 7, createdBy: 7, filamentId: 13, type: "entry", inputUnit: "g", inputQuantity: 100 })).rejects.toThrow("não aceitam g, kg, rolo ou m");
     expect(fakeState.operations).toEqual([]);
     delete process.env.DATABASE_URL;
     resetDbForTests();

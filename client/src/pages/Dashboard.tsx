@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { AlertTriangle, ArrowRight, Boxes, CircleAlert, Factory, Gauge, Package, Plus, RefreshCw, Scale, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 
-const formatWeight = (value: number, unit: "weight" | "unit" = "weight") => `${new Intl.NumberFormat("pt-BR").format(value)} ${unit === "unit" ? "un" : "g"}`;
+const formatWeight = (value: number, unit: "weight" | "unit" | "length" = "weight") => `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: unit === "weight" ? 2 : 0 }).format(value)} ${unit === "unit" ? "un" : unit === "length" ? "m" : "g"}`;
 const formatTotalBalance = (weight: number, units: number) => units > 0 ? `${formatWeight(weight)} · ${formatWeight(units, "unit")}` : formatWeight(weight);
 
 export default function Dashboard() {

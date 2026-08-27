@@ -176,3 +176,14 @@
 - [x] Validar TypeScript, testes, build, desktop e mobile
 - [x] Validar visualmente em desktop e mobile Filamentos e Produtos prontos após remover localização, incluindo formulários, modais, cards e tabela
 - [x] Abrir e validar diretamente os modais de cadastro de filamento, cadastro de produto, configuração de estoque e produção em desktop e mobile após remover localização
+
+## Ajuste: tipo de controle e unidade de medida em filamentos
+
+- [x] Separar Tipo de controle e Unidade de medida no formulário de filamentos
+- [x] Suportar Peso, Quantidade e Comprimento com unidades compatíveis g/kg, un e m
+- [x] Manter peso persistido internamente em gramas e converter entradas em kg
+- [x] Preservar e interpretar corretamente os cadastros existentes
+- [x] Atualizar labels, validações, testes e documentação, com mudanças mínimas de compatibilidade nas telas dependentes
+- [x] Validar formulário em desktop/mobile e salvar checkpoint do ajuste
+- [x] Validar visualmente o modal Novo filamento em desktop e mobile nos estados kg, Quantidade/un e Comprimento/m, confirmando labels dinâmicos e ausência de overflow
+- [ ] Salvar novo checkpoint após concluir a validação visual completa deste ajuste

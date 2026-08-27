@@ -9,7 +9,7 @@ Esta etapa implementa um painel administrativo privado e independente para contr
 | Tabela | Finalidade | Isolamento |
 |---|---|---|
 | `users` | Usuários autenticados do scaffold, com `id`, `openId`, nome, e-mail, papel e timestamps. | Sessão do usuário autenticado. O proprietário do projeto é promovido automaticamente a `admin` pelo fluxo OAuth existente. |
-| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, unidade base, peso por rolo/unidade, saldo, mínimo, custo, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
+| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, tipo de controle (`weight`, `unit` ou `length`), unidade de medida (`g`, `kg`, `unit` ou `m`), peso por rolo/unidade, saldo, mínimo, custo, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
 
 ### Nota sobre RLS
 
@@ -63,7 +63,7 @@ A página `/estoque/movimentacoes` contém busca por filamento, marca, cor e des
 
 ## Como testar entrada e consumo
 
-Primeiro, cadastre um item em `/estoque/filamentos` e escolha a unidade base. Para um filamento, use **Peso** e, se quiser movimentar por rolo, informe 1.000 g em peso por rolo. Para um item contado, use **Unidade** e informe saldos inteiros. Em seguida, abra `/estoque/movimentacoes`, selecione **Nova movimentação**, escolha o rolo, selecione **Entrada**, informe 500 g e confirme. O saldo deve passar de 1.000 g para 1.500 g e o histórico deve registrar a operação.
+Primeiro, cadastre um item em `/estoque/filamentos` e escolha **Peso** como tipo de controle e **g** como unidade de medida. Se quiser movimentar por rolo, informe o peso por rolo/unidade. Para um item contado, use **Quantidade** e a unidade `un`; para material linear, use **Comprimento** e `m`. Em seguida, abra `/estoque/movimentacoes`, selecione **Nova movimentação**, escolha o rolo, selecione **Entrada**, informe 500 g e confirme. O saldo deve passar de 1.000 g para 1.500 g e o histórico deve registrar a operação.
 
 Depois, repita o fluxo selecionando **Consumo em impressão** e informando 200 g. O saldo deve passar de 1.500 g para 1.300 g. Para verificar a proteção, tente consumir mais do que o saldo disponível: a confirmação deve ser bloqueada na prévia e a API também rejeita a operação. O dashboard e a lista de filamentos devem refletir o novo saldo automaticamente.
 
@@ -74,13 +74,13 @@ O stack provisionado usa MySQL/TiDB, portanto não possui RLS nativo do Supabase
 
 ## Etapa 3 — Unidades de medida compatíveis
 
-A tabela `filaments` agora possui `baseUnit` (`weight` ou `unit`) e `weightPerUnit` em gramas. Os filamentos existentes foram preservados e permanecem controlados por peso, com base padrão em gramas. A tabela `stock_movements` ganhou `inputUnit`, `inputQuantity`, `quantityBase`, `previousBalance` e `resultingBalance`; as colunas legadas em gramas continuam disponíveis para compatibilidade com o histórico anterior.
+A tabela `filaments` possui `baseUnit` (`weight`, `unit` ou `length`), `measurementUnit` (`g`, `kg`, `unit` ou `m`) e `weightPerUnit` persistido em gramas. O formulário separa **Tipo de controle** de **Unidade de medida**: Peso permite g/kg, Quantidade permite un e Comprimento permite m. Os filamentos existentes foram preservados como Peso em g. A tabela `stock_movements` ganhou `inputUnit`, `inputQuantity`, `quantityBase`, `previousBalance` e `resultingBalance`; as colunas legadas em gramas continuam disponíveis para compatibilidade com o histórico anterior.
 
-Para itens de peso, o modal permite `g` e `kg`; `rolo` aparece somente quando `weightPerUnit` está configurado. As conversões são `1 kg = 1.000 g` e `1 rolo = peso por unidade`. Para itens de unidade, somente `un` é aceito e a quantidade precisa ser inteira. O backend repete todas as regras de compatibilidade e rejeita operações incompatíveis antes da escrita transacional.
+Para itens de Peso, o cadastro permite g ou kg e o backend converte os saldos e o peso por rolo para gramas antes de persistir; assim, 1 kg é salvo como 1.000 g. A troca entre g e kg no formulário preserva o valor equivalente exibido. Para Quantidade, somente `un` é aceito e a quantidade precisa ser inteira. Para Comprimento, somente `m` é aceito. Nas movimentações, itens de Peso continuam aceitando g, kg e rolo quando há peso por unidade; itens de Quantidade aceitam un e itens de Comprimento aceitam m. O backend repete todas as regras de compatibilidade e rejeita operações incompatíveis antes da escrita transacional.
 
 O dashboard, a listagem de filamentos e o histórico exibem a unidade base apropriada. O resumo do dashboard separa o total em gramas do total em unidades para não somar grandezas diferentes. A prévia do modal mostra a quantidade convertida e o saldo resultante na unidade mais amigável.
 
-A migração aplicada é `drizzle/0003_spotty_psylocke.sql`. Ela adiciona colunas sem remover dados; o backfill do histórico copia os valores legados para os campos genéricos de saldo e quantidade. O fluxo de leitura também normaliza registros legados caso encontre uma linha ainda não preenchida. A validação final passou com **15 testes**, checagem TypeScript e build de produção. O CRUD rejeita saldos fracionados para itens por unidade; ajustes fracionados também são recusados antes de qualquer `update` ou `insert`.
+As migrações `drizzle/0006_white_captain_midlands.sql` e `drizzle/0007_adorable_proteus.sql` ampliam os enums e adicionam `measurementUnit` sem remover saldos ou históricos; os registros existentes foram preenchidos como Peso em g. A validação atual passou com **28 testes**, checagem TypeScript e build de produção. O CRUD rejeita combinações incompatíveis, conversões que não resultem em gramas inteiras e saldos fracionados para Quantidade ou Comprimento.
 
 
 ## Produtos internos e produção

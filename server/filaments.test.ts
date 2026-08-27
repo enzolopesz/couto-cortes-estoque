@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appRouter } from "./routers";
+import { appRouter, normalizeFilamentInput } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 function context(user: TrpcContext["user"]): TrpcContext {
@@ -70,5 +70,63 @@ describe("filaments access and validation", () => {
       status: "available",
       observation: null,
     })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("filament control and measurement units", () => {
+  it("rejects a measurement unit incompatible with the control type", async () => {
+    const caller = appRouter.createCaller(context({
+      id: 42,
+      openId: "measurement-test-user",
+      name: "Measurement Test",
+      email: "measurement@example.com",
+      loginMethod: "test",
+      role: "admin",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    }));
+
+    await expect(caller.filaments.create({
+      material: "Bobina",
+      color: "Azul",
+      brand: "Marca teste",
+      diameter: "1.75",
+      baseUnit: "length",
+      measurementUnit: "kg",
+      weightPerUnit: null,
+      initialWeight: 10,
+      currentWeight: 10,
+      minimumWeight: 1,
+      rollCost: 10,
+      status: "available",
+      observation: null,
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("filament storage normalization", () => {
+  it("stores weight values in grams when the form unit is kg", () => {
+    const normalized = normalizeFilamentInput({
+      material: "PLA",
+      color: "Preto",
+      brand: "Marca teste",
+      diameter: "1.75",
+      baseUnit: "weight",
+      measurementUnit: "kg",
+      weightPerUnit: 0.5,
+      initialWeight: 1,
+      currentWeight: 0.75,
+      minimumWeight: 0.2,
+      rollCost: 89.9,
+      status: "available",
+      observation: null,
+    });
+
+    expect(normalized.measurementUnit).toBe("kg");
+    expect(normalized.weightPerUnit).toBe(500);
+    expect(normalized.initialWeight).toBe(1000);
+    expect(normalized.currentWeight).toBe(750);
+    expect(normalized.minimumWeight).toBe(200);
   });
 });

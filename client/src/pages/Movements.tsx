@@ -16,9 +16,9 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
-type InputUnit = "g" | "kg" | "roll" | "unit";
-const unitLabels: Record<InputUnit, string> = { g: "g", kg: "kg", roll: "rolo", unit: "un" };
-const compatibleUnits = (item?: { baseUnit: "weight" | "unit"; weightPerUnit: number | null }) => item?.baseUnit === "unit" ? ["unit" as InputUnit] : item?.weightPerUnit ? ["g", "kg", "roll"] as InputUnit[] : ["g", "kg"] as InputUnit[];
+type InputUnit = "g" | "kg" | "roll" | "unit" | "m";
+const unitLabels: Record<InputUnit, string> = { g: "g", kg: "kg", roll: "rolo", unit: "un", m: "m" };
+const compatibleUnits = (item?: { baseUnit: "weight" | "unit" | "length"; weightPerUnit: number | null }) => item?.baseUnit === "unit" ? ["unit" as InputUnit] : item?.baseUnit === "length" ? ["m" as InputUnit] : item?.weightPerUnit ? ["g", "kg", "roll"] as InputUnit[] : ["g", "kg"] as InputUnit[];
 const types: Record<MovementType, { label: string; short: string; icon: LucideIcon; className: string; sign: string }> = {
   entry: { label: "Entrada", short: "Entrada", icon: ArrowDownToLine, className: "border-[#24D18A]/20 bg-[#24D18A]/10 text-[#5DE7AB]", sign: "+" },
   consumption: { label: "Consumo em impressão", short: "Consumo", icon: ArrowUpFromLine, className: "border-[#168BFF]/20 bg-[#168BFF]/10 text-[#55B3FF]", sign: "−" },
@@ -29,7 +29,7 @@ const types: Record<MovementType, { label: string; short: string; icon: LucideIc
 };
 const typeOptions = Object.entries(types) as [MovementType, typeof types[MovementType]][];
 const formatWeight = (value: unknown) => `${Number(value ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} g`;
-const formatBase = (value: unknown, baseUnit: "weight" | "unit") => `${Number(value ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: baseUnit === "unit" ? 0 : 2 })} ${baseUnit === "unit" ? "un" : "g"}`;
+const formatBase = (value: unknown, baseUnit: "weight" | "unit" | "length") => `${Number(value ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: baseUnit === "unit" || baseUnit === "length" ? 0 : 2 })} ${baseUnit === "unit" ? "un" : baseUnit === "length" ? "m" : "g"}`;
 const formatDate = (value: Date | string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 function DateFilter({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
@@ -67,9 +67,9 @@ export default function Movements() {
   const newWeight = Number(form.newWeight || 0);
   const inputUnits = compatibleUnits(selected);
   const selectedUnit = form.inputUnit;
-  const convertedQuantity = selected ? (form.type === "adjustment" ? newWeight : selected.baseUnit === "unit" ? quantity : selectedUnit === "kg" ? quantity * 1000 : selectedUnit === "roll" ? quantity * Number(selected.weightPerUnit) : quantity) : 0;
+  const convertedQuantity = selected ? (form.type === "adjustment" ? newWeight : selected.baseUnit === "unit" || selected.baseUnit === "length" ? quantity : selectedUnit === "kg" ? quantity * 1000 : selectedUnit === "roll" ? quantity * Number(selected.weightPerUnit) : quantity) : 0;
   const preview = selected ? (form.type === "adjustment" ? newWeight : Number(selected.currentWeight) + (types[form.type].sign === "+" ? convertedQuantity : -convertedQuantity)) : 0;
-  const validPreview = Boolean(selected && preview >= 0 && (form.type === "adjustment" ? form.newWeight !== "" : quantity > 0 && (selected.baseUnit !== "unit" || Number.isInteger(quantity)) && inputUnits.includes(selectedUnit)));
+  const validPreview = Boolean(selected && preview >= 0 && (form.type === "adjustment" ? form.newWeight !== "" && (selected.baseUnit === "weight" || Number.isInteger(newWeight)) : quantity > 0 && (selected.baseUnit === "weight" || Number.isInteger(quantity)) && inputUnits.includes(selectedUnit)));
 
   const filtered = useMemo(() => (list.data ?? []).filter(item => {
     const haystack = `${item.filamentMaterial} ${item.filamentBrand} ${item.filamentColor} ${item.description ?? ""}`.toLowerCase();
@@ -82,7 +82,7 @@ export default function Movements() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!selected || !validPreview) { toast.error("Revise os dados da movimentação", { description: preview < 0 ? "O saldo não pode ficar negativo." : "Informe uma quantidade válida." }); return; }
-    create.mutate({ filamentId: selected.id, type: form.type, inputUnit: form.type === "adjustment" ? selected.baseUnit === "unit" ? "unit" : "g" : form.inputUnit, inputQuantity: form.type === "adjustment" ? 0 : quantity, adjustmentWeight: form.type === "adjustment" ? newWeight : undefined, description: form.description || null });
+    create.mutate({ filamentId: selected.id, type: form.type, inputUnit: form.type === "adjustment" ? selected.baseUnit === "unit" ? "unit" : selected.baseUnit === "length" ? "m" : "g" : form.inputUnit, inputQuantity: form.type === "adjustment" ? 0 : quantity, adjustmentWeight: form.type === "adjustment" ? newWeight : undefined, description: form.description || null });
   }
 
   return <div className="mx-auto max-w-[1500px] space-y-7">

@@ -1,0 +1,2 @@
+ALTER TABLE `filaments` MODIFY COLUMN `baseUnit` enum('weight','unit','length') NOT NULL DEFAULT 'weight';--> statement-breakpoint
+ALTER TABLE `filaments` ADD `measurementUnit` enum('g','kg','unit','m') DEFAULT 'g' NOT NULL;

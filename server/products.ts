@@ -127,7 +127,7 @@ export function assertSingleRowAffected(result: unknown, message: string) {
   if (affectedRowsOf(result) !== 1) throw new Error(message);
 }
 
-export async function createProduction(input: { ownerId: number; createdBy: number; productId: string; filamentId: number; quantityProduced: number; quantityPerUnit: number; unitUsed: "g" | "kg" | "roll" | "unit"; notes?: string | null }) {
+export async function createProduction(input: { ownerId: number; createdBy: number; productId: string; filamentId: number; quantityProduced: number; quantityPerUnit: number; unitUsed: "g" | "kg" | "roll" | "unit" | "m"; notes?: string | null }) {
   if (!Number.isInteger(input.quantityProduced) || input.quantityProduced <= 0) throw new Error("A quantidade produzida precisa ser um número inteiro maior que zero");
   if (!Number.isFinite(input.quantityPerUnit) || input.quantityPerUnit <= 0) throw new Error("O consumo por unidade precisa ser maior que zero");
   const db = await getDb();
