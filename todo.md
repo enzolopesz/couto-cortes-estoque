@@ -164,3 +164,15 @@
 - [x] Adicionar testes de isolamento por usuário para list, update, inventoryUpdate e produce com ownerId distinto
 - [x] Validar explicitamente os modais de cadastro, estoque e produção em desktop e mobile sem overflow
 - [x] Validar visualmente com os modais abertos os fluxos de cadastro, estoque e produção em desktop e mobile; manter pendente até haver evidência direta
+
+## Ajuste de escopo: remover localização física
+
+- [x] Remover localização/prateleira/caixa dos formulários de filamentos e produtos internos
+- [x] Remover localização das tabelas, cards, detalhes, filtros e dashboard
+- [x] Remover localização dos contratos tRPC, helpers e operações de estoque
+- [x] Avaliar uso atual de product_inventory.storageLocation e remover a coluna se sem uso relevante
+- [x] Criar e aplicar migração não destrutiva para remover a coluna sem afetar saldos ou históricos
+- [x] Atualizar testes e documentação para refletir que não existe recurso de localização nesta versão
+- [x] Validar TypeScript, testes, build, desktop e mobile
+- [x] Validar visualmente em desktop e mobile Filamentos e Produtos prontos após remover localização, incluindo formulários, modais, cards e tabela
+- [x] Abrir e validar diretamente os modais de cadastro de filamento, cadastro de produto, configuração de estoque e produção em desktop e mobile após remover localização

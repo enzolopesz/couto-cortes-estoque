@@ -24,7 +24,7 @@ describe("internal products and production", () => {
 
   it("rejects fractional finished-product inventory", async () => {
     const caller = appRouter.createCaller(context(admin));
-    await expect(caller.products.inventoryUpdate({ productId: "00000000-0000-0000-0000-000000000009", quantityAvailable: 1.5, minimumQuantity: 0, storageLocation: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.products.inventoryUpdate({ productId: "00000000-0000-0000-0000-000000000009", quantityAvailable: 1.5, minimumQuantity: 0 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("guards the final production write so a failed inventory update aborts", () => {
@@ -76,32 +76,32 @@ describe("internal products and production", () => {
 
   it("covers internal CRUD success paths with a controlled driver", async () => {
     const product = { id: "00000000-0000-0000-0000-000000000010", ownerId: 9, name: "Suporte", category: "Casa", imageUrl: null, sku: "CC-010", externalProductId: null, active: 1, createdAt: new Date(), updatedAt: new Date() };
-    const inventory = { id: "inventory-10", ownerId: 9, productId: product.id, quantityAvailable: 0, minimumQuantity: 0, storageLocation: null, updatedAt: new Date() };
+    const inventory = { id: "inventory-10", ownerId: 9, productId: product.id, quantityAvailable: 0, minimumQuantity: 0, updatedAt: new Date() };
     const state = { product, inventory };
     const db = {
       transaction: async (callback: (tx: typeof db) => Promise<unknown>) => callback(db),
       insert: (table: unknown) => ({ values: async (values: Record<string, unknown>) => { if (table === inventoryProducts) Object.assign(state.product, values); if (table === productInventory) Object.assign(state.inventory, values); } }),
       update: (table: unknown) => ({ set: (values: Record<string, unknown>) => ({ where: async () => { if (table === inventoryProducts) Object.assign(state.product, values); if (table === productInventory) Object.assign(state.inventory, values); return [{ affectedRows: 1 }]; } }) }),
       delete: () => ({ where: async () => [{ affectedRows: 1 }] }),
-      select: () => ({ from: (table: unknown) => { const row = table === inventoryProducts ? { ...state.product, quantityAvailable: state.inventory.quantityAvailable, minimumQuantity: state.inventory.minimumQuantity, storageLocation: state.inventory.storageLocation } : state.inventory; const chain = { leftJoin: () => chain, where: () => chain, orderBy: async () => [row], limit: async () => [row] }; return chain; } }),
+      select: () => ({ from: (table: unknown) => { const row = table === inventoryProducts ? { ...state.product, quantityAvailable: state.inventory.quantityAvailable, minimumQuantity: state.inventory.minimumQuantity } : state.inventory; const chain = { leftJoin: () => chain, where: () => chain, orderBy: async () => [row], limit: async () => [row] }; return chain; } }),
     };
     setDbForTests(db as never);
     const created = await createInventoryProduct({ ownerId: 9, name: "Suporte", category: "Casa", imageUrl: null, sku: "CC-010", externalProductId: null, active: true });
     expect(created?.ownerId).toBe(9);
     expect((await listInventoryProducts(9)).length).toBe(1);
     expect((await updateInventoryProduct(product.id, 9, { name: "Suporte novo", category: "Casa", imageUrl: null, sku: "CC-011", externalProductId: null, active: true }))?.name).toBe("Suporte novo");
-    expect((await updateProductInventory(product.id, 9, 3, 1, "Prateleira C"))?.quantityAvailable).toBe(3);
+    expect((await updateProductInventory(product.id, 9, 3, 1))?.quantityAvailable).toBe(3);
     expect(await deleteInventoryProduct(product.id, 9)).toBe(true);
     resetDbForTests();
   });
 
   it("blocks CRUD reads and writes when the controlled row belongs to another owner", async () => {
-    const foreign = { id: "00000000-0000-0000-0000-000000000011", ownerId: 77, name: "Estranho", category: null, imageUrl: null, sku: null, externalProductId: null, active: 1, quantityAvailable: 2, minimumQuantity: 0, storageLocation: null };
+    const foreign = { id: "00000000-0000-0000-0000-000000000011", ownerId: 77, name: "Estranho", category: null, imageUrl: null, sku: null, externalProductId: null, active: 1, quantityAvailable: 2, minimumQuantity: 0 };
     const db = { select: () => ({ from: () => { const chain = { leftJoin: () => chain, where: () => chain, orderBy: async () => [foreign], limit: async () => [foreign] }; return chain; } }), update: () => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }), delete: () => ({ where: async () => [{ affectedRows: 1 }] }) };
     setDbForTests(db as never);
     expect(await listInventoryProducts(9)).toEqual([]);
     expect(await updateInventoryProduct(foreign.id, 9, { name: "Não alterar", category: null, imageUrl: null, sku: null, externalProductId: null, active: true })).toBeUndefined();
-    expect(await updateProductInventory(foreign.id, 9, 2, 0, null)).toBeUndefined();
+    expect(await updateProductInventory(foreign.id, 9, 2, 0)).toBeUndefined();
     expect(await deleteInventoryProduct(foreign.id, 9)).toBe(false);
     resetDbForTests();
   });

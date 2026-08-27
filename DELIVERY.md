@@ -9,7 +9,7 @@ Esta etapa implementa um painel administrativo privado e independente para contr
 | Tabela | Finalidade | Isolamento |
 |---|---|---|
 | `users` | Usuários autenticados do scaffold, com `id`, `openId`, nome, e-mail, papel e timestamps. | Sessão do usuário autenticado. O proprietário do projeto é promovido automaticamente a `admin` pelo fluxo OAuth existente. |
-| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, unidade base, peso por rolo/unidade, saldo, mínimo, custo, localização, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
+| `filaments` | Cadastro de matéria-prima com material, cor, marca, diâmetro, unidade base, peso por rolo/unidade, saldo, mínimo, custo, status, observação, proprietário e timestamps. | Todas as queries e mutações exigem autenticação e filtram simultaneamente por `id` e `ownerId`. |
 
 ### Nota sobre RLS
 
@@ -24,7 +24,7 @@ O projeto foi inicializado no stack full-stack provisionado, que usa MySQL/TiDB 
 | `/estoque` | Protegida | Dashboard com itens cadastrados, saldo separado em peso/unidades, itens abaixo do mínimo, inventário recente e estado vazio. |
 | `/estoque/filamentos` | Protegida | CRUD completo com busca, filtros por material, marca, cor e status, filtro de estoque baixo, edição e exclusão confirmada. |
 
-Os itens **Produtos prontos** e **Configurações** aparecem como “Em breve”. **Movimentações** está disponível em `/estoque/movimentacoes`.
+**Movimentações** está disponível em `/estoque/movimentacoes` e **Produtos prontos** em `/estoque/produtos`. **Configurações** permanece como módulo futuro.
 
 ## Primeiro usuário administrador
 
@@ -85,10 +85,10 @@ A migração aplicada é `drizzle/0003_spotty_psylocke.sql`. Ela adiciona coluna
 
 ## Produtos internos e produção
 
-A etapa atual usa exclusivamente a tabela `inventory_products`; não existe consulta, alteração ou duplicação da tabela pública `products`. Cada produto interno possui `name`, `category`, `image_url`, `sku`, `active` e `external_product_id` opcional, reservado para futura sincronização. O estoque unitário fica em `product_inventory`, com `quantity_available`, `minimum_quantity` e `storage_location`. As produções ficam em `production_records`.
+A etapa atual usa exclusivamente a tabela `inventory_products`; não existe consulta, alteração ou duplicação da tabela pública `products`. Cada produto interno possui `name`, `category`, `image_url`, `sku`, `active` e `external_product_id` opcional, reservado para futura sincronização. O estoque unitário fica em `product_inventory`, com `quantity_available` e `minimum_quantity`. As produções ficam em `production_records`; não há localização física nesta versão.
 
 A rota protegida `/estoque/produtos` oferece criação, edição, exclusão, busca, filtro por categoria, configuração de estoque em unidades inteiras e registro de produção. A confirmação executa uma transação que valida o material, baixa o filamento, cria a movimentação automática de consumo, registra a produção e aumenta o estoque do produto pronto. O dashboard mostra produtos prontos e produções recentes.
 
 ### Roteiro de teste
 
-Cadastre um produto interno, por exemplo “Suporte de parede”, configure estoque mínimo `2 un` e localização “Prateleira C”. Depois selecione **Registrar produção**, escolha o produto, um filamento com saldo de `1.000 g`, informe `3` em quantidade produzida, `120` em consumo por unidade e `g` como unidade. A prévia deve mostrar `0 un → 3 un` no produto e `1.000 g → 640 g` no material. Ao confirmar, devem ser criados o registro de produção e o consumo, o estoque pronto deve subir para `3 un` e o filamento deve baixar para `640 g`. Qualquer saldo insuficiente ou unidade incompatível deve abortar toda a transação.
+Cadastre um produto interno, por exemplo “Suporte de parede”, e configure estoque mínimo `2 un`. Depois selecione **Registrar produção**, escolha o produto, um filamento com saldo de `1.000 g`, informe `3` em quantidade produzida, `120` em consumo por unidade e `g` como unidade. A prévia deve mostrar `0 un → 3 un` no produto e `1.000 g → 640 g` no material. Ao confirmar, devem ser criados o registro de produção e o consumo, o estoque pronto deve subir para `3 un` e o filamento deve baixar para `640 g`. Qualquer saldo insuficiente ou unidade incompatível deve abortar toda a transação.

@@ -29,7 +29,6 @@ const filamentInput = z.object({
   currentWeight: z.number().int().min(0, "O peso não pode ser negativo"),
   minimumWeight: z.number().int().min(0, "O estoque mínimo não pode ser negativo"),
   rollCost: z.number().min(0, "O custo não pode ser negativo"),
-  location: z.string().trim().min(1, "Informe a localização").max(120),
   status: z.enum(["available", "reserved", "finished"]),
   observation: z.string().trim().max(1000).optional().nullable(),
 }).superRefine((value, ctx) => {
@@ -47,7 +46,7 @@ async function notifyLowStock(filament: Filament): Promise<boolean> {
   try {
     return await notifyOwner({
       title: `Estoque baixo: ${filament.material} ${filament.color}`,
-      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} ${filament.baseUnit === "unit" ? "un" : "g"} disponíveis, no limite mínimo de ${filament.minimumWeight} ${filament.baseUnit === "unit" ? "un" : "g"}. Localização: ${filament.location}.`,
+      content: `O filamento ${filament.brand} ${filament.material} (${filament.color}) está com ${filament.currentWeight} ${filament.baseUnit === "unit" ? "un" : "g"} disponíveis, no limite mínimo de ${filament.minimumWeight} ${filament.baseUnit === "unit" ? "un" : "g"}.`,
     });
   } catch (error) {
     console.warn("[Filaments] Could not send low-stock notification:", error);
@@ -84,7 +83,6 @@ const productInventoryInput = z.object({
   productId: z.string().uuid(),
   quantityAvailable: z.number().int().min(0),
   minimumQuantity: z.number().int().min(0),
-  storageLocation: z.string().trim().max(120).optional().nullable(),
 });
 
 const productionInput = z.object({
@@ -160,7 +158,7 @@ const productsRouter = router({
   create: protectedProcedure.input(productInput).mutation(({ ctx, input }) => createInventoryProduct({ ...input, ownerId: ctx.user.id })),
   update: protectedProcedure.input(z.object({ id: z.string().uuid(), data: productInput })).mutation(({ ctx, input }) => updateInventoryProduct(input.id, ctx.user.id, { ...input.data, active: input.data.active })),
   remove: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ ctx, input }) => deleteInventoryProduct(input.id, ctx.user.id)),
-  inventoryUpdate: protectedProcedure.input(productInventoryInput).mutation(({ ctx, input }) => updateProductInventory(input.productId, ctx.user.id, input.quantityAvailable, input.minimumQuantity, input.storageLocation)),
+  inventoryUpdate: protectedProcedure.input(productInventoryInput).mutation(({ ctx, input }) => updateProductInventory(input.productId, ctx.user.id, input.quantityAvailable, input.minimumQuantity)),
   productions: protectedProcedure.query(({ ctx }) => listProductionRecords(ctx.user.id)),
   produce: protectedProcedure.input(productionInput).mutation(async ({ ctx, input }) => {
     try {

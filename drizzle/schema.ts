@@ -36,7 +36,6 @@ export const filaments = mysqlTable("filaments", {
   currentWeight: int("currentWeight").notNull(),
   minimumWeight: int("minimumWeight").notNull(),
   rollCost: decimal("rollCost", { precision: 10, scale: 2 }).notNull(),
-  location: varchar("location", { length: 120 }).notNull(),
   status: mysqlEnum("status", ["available", "reserved", "finished"]).default("available").notNull(),
   observation: text("observation"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -93,7 +92,6 @@ export const productInventory = mysqlTable("product_inventory", {
   productId: varchar("product_id", { length: 36 }).notNull().unique().references(() => inventoryProducts.id),
   quantityAvailable: int("quantity_available").default(0).notNull(),
   minimumQuantity: int("minimum_quantity").default(0).notNull(),
-  storageLocation: varchar("storage_location", { length: 120 }),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 

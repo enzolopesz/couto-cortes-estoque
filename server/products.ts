@@ -28,7 +28,6 @@ export async function listInventoryProducts(ownerId: number) {
     updatedAt: inventoryProducts.updatedAt,
     quantityAvailable: productInventory.quantityAvailable,
     minimumQuantity: productInventory.minimumQuantity,
-    storageLocation: productInventory.storageLocation,
     ownerId: inventoryProducts.ownerId,
   }).from(inventoryProducts)
     .leftJoin(productInventory, eq(productInventory.productId, inventoryProducts.id))
@@ -49,7 +48,6 @@ export async function getInventoryProduct(id: string, ownerId: number) {
     active: inventoryProducts.active,
     quantityAvailable: productInventory.quantityAvailable,
     minimumQuantity: productInventory.minimumQuantity,
-    storageLocation: productInventory.storageLocation,
     ownerId: inventoryProducts.ownerId,
   }).from(inventoryProducts)
     .leftJoin(productInventory, eq(productInventory.productId, inventoryProducts.id))
@@ -73,7 +71,7 @@ export async function createInventoryProduct(input: ProductInput) {
       externalProductId: input.externalProductId || null,
       active: input.active === false ? 0 : 1,
     });
-    await tx.insert(productInventory).values({ id: randomUUID(), ownerId: input.ownerId, productId: id, quantityAvailable: 0, minimumQuantity: 0, storageLocation: null });
+    await tx.insert(productInventory).values({ id: randomUUID(), ownerId: input.ownerId, productId: id, quantityAvailable: 0, minimumQuantity: 0 });
   });
   return getInventoryProduct(id, input.ownerId);
 }
@@ -97,13 +95,13 @@ export async function deleteInventoryProduct(id: string, ownerId: number) {
   return true;
 }
 
-export async function updateProductInventory(id: string, ownerId: number, quantity: number, minimumQuantity: number, storageLocation?: string | null) {
+export async function updateProductInventory(id: string, ownerId: number, quantity: number, minimumQuantity: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
   if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(minimumQuantity) || minimumQuantity < 0) throw new Error("O estoque de produtos prontos aceita somente números inteiros não negativos");
   const existing = await getInventoryProduct(id, ownerId);
   if (!existing) return undefined;
-  await db.update(productInventory).set({ quantityAvailable: quantity, minimumQuantity, storageLocation: storageLocation?.trim() || null, updatedAt: new Date() }).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId)));
+  await db.update(productInventory).set({ quantityAvailable: quantity, minimumQuantity, updatedAt: new Date() }).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId)));
   return getInventoryProduct(id, ownerId);
 }
 

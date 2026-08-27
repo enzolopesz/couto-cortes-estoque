@@ -36,6 +36,13 @@
       "when": 1787858356312,
       "tag": "0004_romantic_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787859981894,
+      "tag": "0005_wealthy_loki",
+      "breakpoints": true
     }
   ]
 }

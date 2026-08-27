@@ -40,7 +40,6 @@ describe("filaments access and validation", () => {
       currentWeight: 2.5,
       minimumWeight: 1,
       rollCost: 10,
-      location: "Prateleira B",
       status: "available",
       observation: null,
     })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -68,7 +67,6 @@ describe("filaments access and validation", () => {
       currentWeight: 600,
       minimumWeight: 100,
       rollCost: 89.9,
-      location: "Prateleira A",
       status: "available",
       observation: null,
     })).rejects.toMatchObject({ code: "BAD_REQUEST" });
