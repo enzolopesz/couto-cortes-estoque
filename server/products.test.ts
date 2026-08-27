@@ -47,13 +47,13 @@ describe("internal products and production", () => {
     let committed = false;
     let rolledBack = false;
     const tx = {
-      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; return selectCall === 1 ? [{ id: "00000000-0000-0000-0000-000000000009", ownerId: 9, active: 1 }] : selectCall === 2 ? [{ quantityAvailable: 0, productId: "00000000-0000-0000-0000-000000000009", ownerId: 9 }] : [{ id: 3, ownerId: 9, currentWeight: 1000, minimumWeight: 0, baseUnit: "weight", weightPerUnit: 1000, status: "available" }]; } }) }) }),
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; return selectCall === 1 ? [{ id: "00000000-0000-0000-0000-000000000009", ownerId: 9, active: 1 }] : selectCall === 2 ? [{ quantityAvailable: 0, productId: "00000000-0000-0000-0000-000000000009", ownerId: 9 }] : selectCall === 3 ? [{ filamentId: 3, quantityBase: "120.000", unitType: "g" }] : [{ id: 3, ownerId: 9, currentWeight: 1000, minimumWeight: 0, baseUnit: "weight", weightPerUnit: 1000, status: "available", brand: "Voolt3D", material: "PLA", color: "Preto" }]; } }) }) }),
       update: () => ({ set: () => ({ where: async () => { updateCall += 1; operations.push(`update-${updateCall}`); return [{ affectedRows: updateCall === 1 ? 1 : 0 }]; } }) }),
       insert: () => ({ values: async () => { operations.push("insert"); } }),
     };
     setDbForTests({ transaction: async callback => { try { const result = await callback(tx); committed = true; return result; } catch (error) { rolledBack = true; throw error; } } } as never);
 
-    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "00000000-0000-0000-0000-000000000009", filamentId: 3, quantityProduced: 1, quantityPerUnit: 120, unitUsed: "g" })).rejects.toThrow("estoque do produto");
+    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "00000000-0000-0000-0000-000000000009", quantityProduced: 1 })).rejects.toThrow("estoque do produto");
     expect(rolledBack).toBe(true);
     expect(committed).toBe(false);
     expect(operations).toEqual(["update-1", "insert", "insert", "update-2"]);
@@ -64,12 +64,12 @@ describe("internal products and production", () => {
     let selectCall = 0;
     const operations: string[] = [];
     const tx = {
-      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; return selectCall === 1 ? [{ id: "00000000-0000-0000-0000-000000000009", ownerId: 9, active: 1 }] : selectCall === 2 ? [{ quantityAvailable: 0, productId: "00000000-0000-0000-0000-000000000009", ownerId: 9 }] : [{ id: 3, ownerId: 9, currentWeight: 100, minimumWeight: 0, baseUnit: "weight", weightPerUnit: null, status: "available" }]; } }) }) }),
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; return selectCall === 1 ? [{ id: "00000000-0000-0000-0000-000000000009", ownerId: 9, active: 1 }] : selectCall === 2 ? [{ quantityAvailable: 0, productId: "00000000-0000-0000-0000-000000000009", ownerId: 9 }] : selectCall === 3 ? [{ filamentId: 3, quantityBase: "120.000", unitType: "g" }] : [{ id: 3, ownerId: 9, currentWeight: 100, minimumWeight: 0, baseUnit: "weight", weightPerUnit: null, status: "available", brand: "Voolt3D", material: "PLA", color: "Preto" }]; } }) }) }),
       update: () => ({ set: () => ({ where: async () => { operations.push("update"); return [{ affectedRows: 1 }]; } }) }),
       insert: () => ({ values: async () => { operations.push("insert"); } }),
     };
     setDbForTests({ transaction: async callback => callback(tx) } as never);
-    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "00000000-0000-0000-0000-000000000009", filamentId: 3, quantityProduced: 1, quantityPerUnit: 120, unitUsed: "g" })).rejects.toThrow();
+    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "00000000-0000-0000-0000-000000000009", quantityProduced: 1 })).rejects.toThrow();
     expect(operations).toEqual([]);
     resetDbForTests();
   });
@@ -116,7 +116,7 @@ describe("internal products and production", () => {
       }) as never,
     };
     setDbForTests(db as never);
-    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "foreign", filamentId: 3, quantityProduced: 1, quantityPerUnit: 120, unitUsed: "g" })).rejects.toThrow("Produto interno");
+    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "foreign", quantityProduced: 1 })).rejects.toThrow("Produto interno");
     expect(operations).toEqual([]);
     resetDbForTests();
   });
@@ -131,7 +131,7 @@ describe("internal products and production", () => {
 
   it("requires positive integer production quantity", async () => {
     const caller = appRouter.createCaller(context(admin));
-    await expect(caller.products.produce({ productId: "00000000-0000-0000-0000-000000000009", filamentId: 1, quantityProduced: 0, quantityPerUnit: 120, unitUsed: "g", notes: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.products.produce({ productId: "00000000-0000-0000-0000-000000000009", quantityProduced: 0, notes: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
@@ -150,5 +150,37 @@ describe("product material composition", () => {
     expect(compatibleProductMaterialUnits("unit")).toEqual(["unit"]);
     expect(() => convertProductMaterialToBase(1, "kg", "unit")).toThrow("compatível");
     expect(convertProductMaterialToBase(2.5, "unit", "unit")).toEqual({ quantityBase: 2.5, unitType: "unit" });
+  });
+});
+
+
+describe("multi-material production", () => {
+  it("consumes every BOM row and increases finished-product inventory atomically", async () => {
+    const operations: string[] = [];
+    let selectCall = 0;
+    const tx = {
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; if (selectCall === 1) return [{ id: "product-bom", ownerId: 9, active: 1 }]; if (selectCall === 2) return [{ productId: "product-bom", ownerId: 9, quantityAvailable: 0 }]; if (selectCall === 3) return [{ filamentId: 3, quantityBase: "120.000", unitType: "g" }, { filamentId: 4, quantityBase: "2.000", unitType: "m" }]; if (selectCall === 4) return [{ id: 3, ownerId: 9, brand: "Voolt3D", material: "PLA", color: "Preto", baseUnit: "weight", currentWeight: 1000, status: "available" }]; return [{ id: 4, ownerId: 9, brand: "Voolt3D", material: "TPU", color: "Vermelho", baseUnit: "length", currentWeight: 50, status: "available" }]; } }) }) }),
+      update: () => ({ set: () => ({ where: async () => { operations.push("update"); return [{ affectedRows: 1 }]; } }) }),
+      insert: () => ({ values: async () => { operations.push("insert"); } }),
+    };
+    setDbForTests({ transaction: async callback => callback(tx) } as never);
+    const result = await createProduction({ ownerId: 9, createdBy: 9, productId: "product-bom", quantityProduced: 3 });
+    expect(result.materials).toEqual([{ filamentId: 3, totalConsumedBase: 360, resultingBalance: 640 }, { filamentId: 4, totalConsumedBase: 6, resultingBalance: 44 }]);
+    expect(operations).toEqual(["update", "insert", "insert", "update", "insert", "insert", "update"]);
+    resetDbForTests();
+  });
+
+  it("validates every material before writing when one BOM row is insufficient", async () => {
+    const operations: string[] = [];
+    let selectCall = 0;
+    const tx = {
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => { selectCall += 1; if (selectCall === 1) return [{ id: "product-bom", ownerId: 9, active: 1 }]; if (selectCall === 2) return [{ productId: "product-bom", ownerId: 9, quantityAvailable: 0 }]; if (selectCall === 3) return [{ filamentId: 3, quantityBase: "120.000", unitType: "g" }, { filamentId: 4, quantityBase: "2.000", unitType: "m" }]; if (selectCall === 4) return [{ id: 3, ownerId: 9, brand: "Voolt3D", material: "PLA", color: "Preto", baseUnit: "weight", currentWeight: 1000, status: "available" }]; return [{ id: 4, ownerId: 9, brand: "Voolt3D", material: "TPU", color: "Vermelho", baseUnit: "length", currentWeight: 1, status: "available" }]; } }) }) }),
+      update: () => ({ set: () => ({ where: async () => { operations.push("update"); return [{ affectedRows: 1 }]; } }) }),
+      insert: () => ({ values: async () => { operations.push("insert"); } }),
+    };
+    setDbForTests({ transaction: async callback => callback(tx) } as never);
+    await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "product-bom", quantityProduced: 3 })).rejects.toThrow("TPU");
+    expect(operations).toEqual([]);
+    resetDbForTests();
   });
 });

@@ -203,3 +203,13 @@
 - [x] Salvar um novo checkpoint após concluir esta etapa da ficha técnica com múltiplos materiais
 - [x] Validação visual/funcional com dados persistidos delegada ao usuário, sem criação de dados artificiais
 - [x] Usuário validará pela interface real a ficha técnica preenchida com os filamentos persistidos, sem criação de dados artificiais nesta sessão
+
+## Correção: produção baseada na ficha técnica completa
+
+- [x] Remover do modal de produção material, consumo e unidade editáveis
+- [x] Carregar automaticamente todos os materiais de product_materials ao selecionar o produto
+- [x] Exibir prévia de consumo total, saldo atual e saldo após para todos os materiais
+- [x] Bloquear a confirmação se qualquer material estiver sem saldo suficiente
+- [x] Tornar a produção multi-material atômica, baixando todos os materiais e registrando o histórico
+- [x] Preservar conversões, isolamento, catálogo público e não alterar saldos durante testes
+- [x] Atualizar testes, documentação, responsividade e validação técnica; executar build final e salvar checkpoint

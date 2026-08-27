@@ -114,10 +114,7 @@ const productInventoryInput = z.object({
 
 const productionInput = z.object({
   productId: z.string().uuid(),
-  filamentId: z.number().int().positive(),
   quantityProduced: z.number().int().positive(),
-  quantityPerUnit: z.number().positive(),
-  unitUsed: z.enum(["g", "kg", "roll", "unit", "m"]),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 
