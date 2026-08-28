@@ -285,3 +285,12 @@
 - [x] Preservar ficha técnica automática, reserva no início e aumento de produto somente na finalização
 - [x] Adicionar testes do fluxo de pré-seleção e filtros de impressoras sem criar dados reais
 - [x] Executar TypeScript, Vitest, build e validação visual desktop/mobile; salvar checkpoint
+
+## Limpeza autorizada de dados operacionais
+
+- [x] Inspecionar tabelas, foreign keys, contagens e imagens operacionais antes da limpeza
+- [x] Definir ordem de exclusão sem DROP, mantendo schema, constraints, autenticação e storage
+- [x] Limpar reservas, movimentos de produção, runs, fichas técnicas, movimentos, produtos, filamentos e impressoras
+- [x] Remover somente imagens de produtos operacionais apagados, preservando bucket e policies
+- [x] Validar ausência de registros e órfãos, usuário atual e funcionamento das páginas vazias
+- [x] Salvar checkpoint da limpeza concluída sem criar dados artificiais
