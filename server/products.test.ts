@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { assertSingleRowAffected, createInventoryProduct, createProduction, deleteInventoryProduct, listInventoryProducts, updateInventoryProduct, updateProductInventory } from "./products";
+import { assertSingleRowAffected, createInventoryProduct, createProductStockOut, createProduction, deleteInventoryProduct, listInventoryProducts, updateInventoryProduct, updateProductInventory } from "./products";
 import { inventoryProducts, productInventory } from "../drizzle/schema";
 import { resetDbForTests, setDbForTests } from "./db";
 import type { TrpcContext } from "./_core/context";
@@ -97,7 +97,7 @@ describe("internal products and production", () => {
 
   it("blocks CRUD reads and writes when the controlled row belongs to another owner", async () => {
     const foreign = { id: "00000000-0000-0000-0000-000000000011", ownerId: 77, name: "Estranho", category: null, imageUrl: null, sku: null, externalProductId: null, active: 1, quantityAvailable: 2, minimumQuantity: 0 };
-    const db = { select: () => ({ from: () => { const chain = { leftJoin: () => chain, where: () => chain, orderBy: async () => [foreign], limit: async () => [foreign] }; return chain; } }), update: () => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }), delete: () => ({ where: async () => [{ affectedRows: 1 }] }) };
+    const db: any = { transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db), select: () => ({ from: () => { const chain = { leftJoin: () => chain, where: () => chain, orderBy: async () => [foreign], limit: async () => [foreign] }; return chain; } }), update: () => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }), delete: () => ({ where: async () => [{ affectedRows: 1 }] }) };
     setDbForTests(db as never);
     expect(await listInventoryProducts(9)).toEqual([]);
     expect(await updateInventoryProduct(foreign.id, 9, { name: "Não alterar", category: null, imageUrl: null, sku: null, externalProductId: null, active: true })).toBeUndefined();
@@ -180,6 +180,54 @@ describe("multi-material production", () => {
     };
     setDbForTests({ transaction: async callback => callback(tx) } as never);
     await expect(createProduction({ ownerId: 9, createdBy: 9, productId: "product-bom", quantityProduced: 3 })).rejects.toThrow("TPU");
+    expect(operations).toEqual([]);
+    resetDbForTests();
+  });
+});
+
+
+describe("finished product stock movements", () => {
+  it("records the delta when manually adjusting product stock", async () => {
+    const inventory = { id: "inventory-20", ownerId: 9, productId: "product-20", quantityAvailable: 5, minimumQuantity: 1 };
+    const inserted: Record<string, unknown>[] = [];
+    const db: any = {
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+      select: () => ({ from: () => { const chain: any = { leftJoin: () => chain, where: () => chain, orderBy: async () => [inventory], limit: async () => [inventory] }; return chain; } }),
+      update: () => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }),
+      insert: () => ({ values: async (value: Record<string, unknown>) => { inserted.push(value); } }),
+    };
+    setDbForTests(db as never);
+    await updateProductInventory("product-20", 9, 8, 2, 9, "Contagem física");
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ productId: "product-20", type: "adjustment", previousQuantity: 5, quantityDelta: 3, resultingQuantity: 8, reason: "manual", notes: "Contagem física", createdBy: 9 });
+    resetDbForTests();
+  });
+
+  it("records an operational exit as a negative delta without touching filaments", async () => {
+    const operations: string[] = [];
+    const inventory = { id: "inventory-21", ownerId: 9, productId: "product-21", quantityAvailable: 8, minimumQuantity: 1 };
+    const inserted: Record<string, unknown>[] = [];
+    const db: any = {
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => [inventory] }) }) }),
+      update: () => ({ set: () => ({ where: async () => { operations.push("product-update"); return [{ affectedRows: 1 }]; } }) }),
+      insert: () => ({ values: async (value: Record<string, unknown>) => { operations.push("history-insert"); inserted.push(value); } }),
+    };
+    setDbForTests(db as never);
+    const result = await createProductStockOut({ ownerId: 9, createdBy: 9, productId: "product-21", quantity: 3, reason: "delivery", notes: "Pedido 42" });
+    expect(result).toEqual({ previousQuantity: 8, quantityDelta: -3, resultingQuantity: 5 });
+    expect(inserted[0]).toMatchObject({ productId: "product-21", type: "out", previousQuantity: 8, quantityDelta: -3, resultingQuantity: 5, reason: "delivery", notes: "Pedido 42", createdBy: 9 });
+    expect(operations).toEqual(["product-update", "history-insert"]);
+    resetDbForTests();
+  });
+
+  it("rejects an exit greater than available stock before any write", async () => {
+    const operations: string[] = [];
+    const db: any = {
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({ select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ ownerId: 9, productId: "product-22", quantityAvailable: 2 }] }) }) }), update: () => ({ set: () => ({ where: async () => { operations.push("update"); return [{ affectedRows: 1 }]; } }) }), insert: () => ({ values: async () => { operations.push("insert"); } }) }),
+    };
+    setDbForTests(db as never);
+    await expect(createProductStockOut({ ownerId: 9, createdBy: 9, productId: "product-22", quantity: 3, reason: "sale" })).rejects.toThrow("disponível 2 un");
     expect(operations).toEqual([]);
     resetDbForTests();
   });

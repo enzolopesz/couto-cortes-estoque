@@ -113,6 +113,23 @@ export const productInventory = mysqlTable("product_inventory", {
 export type ProductInventory = typeof productInventory.$inferSelect;
 export type InsertProductInventory = typeof productInventory.$inferInsert;
 
+export const productStockMovements = mysqlTable("product_stock_movements", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
+  type: mysqlEnum("type", ["adjustment", "out"]).notNull(),
+  previousQuantity: int("previous_quantity").notNull(),
+  quantityDelta: int("quantity_delta").notNull(),
+  resultingQuantity: int("resulting_quantity").notNull(),
+  reason: varchar("reason", { length: 32 }),
+  notes: text("notes"),
+  createdBy: int("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProductStockMovement = typeof productStockMovements.$inferSelect;
+export type InsertProductStockMovement = typeof productStockMovements.$inferInsert;
+
 export const productionRecords = mysqlTable("production_records", {
   id: varchar("id", { length: 36 }).primaryKey(),
   ownerId: int("owner_id").notNull().references(() => users.id),

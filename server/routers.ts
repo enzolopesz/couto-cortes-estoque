@@ -18,6 +18,8 @@ import {
 import type { Filament } from "../drizzle/schema";
 import { createInventoryProduct, createProduction, deleteInventoryProduct, getInventoryProduct, getProductInventorySummary, listInventoryProducts,   listProductionRecords,
   listProductMaterials,
+  listProductStockMovements,
+  createProductStockOut,
   updateInventoryProduct, updateProductInventory } from "./products";
 
 const filamentInput = z.object({
@@ -110,6 +112,14 @@ const productInventoryInput = z.object({
   productId: z.string().uuid(),
   quantityAvailable: z.number().int().min(0),
   minimumQuantity: z.number().int().min(0),
+  notes: z.string().trim().max(1000).optional().nullable(),
+});
+
+const productStockOutInput = z.object({
+  productId: z.string().uuid(),
+  quantity: z.number().int().positive(),
+  reason: z.enum(["sale", "delivery", "internal_use", "adjustment", "other"]),
+  notes: z.string().trim().max(1000).optional().nullable(),
 });
 
 const productionInput = z.object({
@@ -185,7 +195,15 @@ const productsRouter = router({
   create: protectedProcedure.input(productInput).mutation(({ ctx, input }) => createInventoryProduct({ ...input, ownerId: ctx.user.id })),
   update: protectedProcedure.input(z.object({ id: z.string().uuid(), data: productInput })).mutation(({ ctx, input }) => updateInventoryProduct(input.id, ctx.user.id, { ...input.data, active: input.data.active })),
   remove: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(({ ctx, input }) => deleteInventoryProduct(input.id, ctx.user.id)),
-  inventoryUpdate: protectedProcedure.input(productInventoryInput).mutation(({ ctx, input }) => updateProductInventory(input.productId, ctx.user.id, input.quantityAvailable, input.minimumQuantity)),
+  inventoryUpdate: protectedProcedure.input(productInventoryInput).mutation(({ ctx, input }) => updateProductInventory(input.productId, ctx.user.id, input.quantityAvailable, input.minimumQuantity, ctx.user.id, input.notes)),
+  stockMovements: protectedProcedure.query(({ ctx }) => listProductStockMovements(ctx.user.id)),
+  stockOut: protectedProcedure.input(productStockOutInput).mutation(async ({ ctx, input }) => {
+    try {
+      return await createProductStockOut({ ...input, ownerId: ctx.user.id, createdBy: ctx.user.id });
+    } catch (error) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "Não foi possível registrar a saída" });
+    }
+  }),
   productions: protectedProcedure.query(({ ctx }) => listProductionRecords(ctx.user.id)),
   produce: protectedProcedure.input(productionInput).mutation(async ({ ctx, input }) => {
     try {

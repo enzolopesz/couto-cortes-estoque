@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { inventoryProducts, productInventory, productMaterials, productionRecords, filaments, stockMovements, users } from "../drizzle/schema";
+import { inventoryProducts, productInventory, productMaterials, productStockMovements, productionRecords, filaments, stockMovements, users } from "../drizzle/schema";
 import { calculateMovementResult, convertMovementToBase, getDb } from "./db";
 
 export type MaterialUnit = "g" | "kg" | "m" | "unit";
@@ -143,14 +143,45 @@ export async function deleteInventoryProduct(id: string, ownerId: number) {
   return true;
 }
 
-export async function updateProductInventory(id: string, ownerId: number, quantity: number, minimumQuantity: number) {
+export async function updateProductInventory(id: string, ownerId: number, quantity: number, minimumQuantity: number, createdBy = ownerId, notes?: string | null) {
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
   if (!Number.isInteger(quantity) || quantity < 0 || !Number.isInteger(minimumQuantity) || minimumQuantity < 0) throw new Error("O estoque de produtos prontos aceita somente números inteiros não negativos");
-  const existing = await getInventoryProduct(id, ownerId);
-  if (!existing) return undefined;
-  await db.update(productInventory).set({ quantityAvailable: quantity, minimumQuantity, updatedAt: new Date() }).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId)));
-  return getInventoryProduct(id, ownerId);
+  return db.transaction(async tx => {
+    const [inventory] = await tx.select().from(productInventory).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId))).limit(1);
+    if (!inventory || inventory.ownerId !== ownerId) return undefined;
+    const previousQuantity = Number(inventory.quantityAvailable);
+    const quantityDelta = quantity - previousQuantity;
+    const updateResult = await tx.update(productInventory).set({ quantityAvailable: quantity, minimumQuantity, updatedAt: new Date() }).where(and(eq(productInventory.productId, id), eq(productInventory.ownerId, ownerId), eq(productInventory.quantityAvailable, inventory.quantityAvailable)));
+    assertSingleRowAffected(updateResult, "O estoque do produto foi alterado por outra operação. Atualize e tente novamente");
+    if (quantityDelta !== 0) {
+      await tx.insert(productStockMovements).values({ id: randomUUID(), ownerId, productId: id, type: "adjustment", previousQuantity, quantityDelta, resultingQuantity: quantity, reason: "manual", notes: notes?.trim() || null, createdBy });
+    }
+    return { previousQuantity, quantityDelta, resultingQuantity: quantity };
+  }).then(async result => result ? { ...await getInventoryProduct(id, ownerId), stockChange: result } : undefined);
+}
+
+export async function createProductStockOut(input: { ownerId: number; createdBy: number; productId: string; quantity: number; reason: "sale" | "delivery" | "internal_use" | "adjustment" | "other"; notes?: string | null }) {
+  if (!Number.isInteger(input.quantity) || input.quantity <= 0) throw new Error("A quantidade de saída precisa ser um número inteiro maior que zero");
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  return db.transaction(async tx => {
+    const [inventory] = await tx.select().from(productInventory).where(and(eq(productInventory.productId, input.productId), eq(productInventory.ownerId, input.ownerId))).limit(1);
+    if (!inventory || inventory.ownerId !== input.ownerId) throw new Error("Estoque do produto não encontrado");
+    const previousQuantity = Number(inventory.quantityAvailable);
+    if (input.quantity > previousQuantity) throw new Error(`Estoque insuficiente: disponível ${previousQuantity} un`);
+    const resultingQuantity = previousQuantity - input.quantity;
+    const updateResult = await tx.update(productInventory).set({ quantityAvailable: resultingQuantity, updatedAt: new Date() }).where(and(eq(productInventory.productId, input.productId), eq(productInventory.ownerId, input.ownerId), eq(productInventory.quantityAvailable, inventory.quantityAvailable)));
+    assertSingleRowAffected(updateResult, "O estoque do produto foi alterado por outra operação. Atualize e tente novamente");
+    await tx.insert(productStockMovements).values({ id: randomUUID(), ownerId: input.ownerId, productId: input.productId, type: "out", previousQuantity, quantityDelta: -input.quantity, resultingQuantity, reason: input.reason, notes: input.notes?.trim() || null, createdBy: input.createdBy });
+    return { previousQuantity, quantityDelta: -input.quantity, resultingQuantity };
+  });
+}
+
+export async function listProductStockMovements(ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  return db.select({ id: productStockMovements.id, productId: inventoryProducts.id, productName: inventoryProducts.name, type: productStockMovements.type, previousQuantity: productStockMovements.previousQuantity, quantityDelta: productStockMovements.quantityDelta, resultingQuantity: productStockMovements.resultingQuantity, reason: productStockMovements.reason, notes: productStockMovements.notes, userName: users.name, createdAt: productStockMovements.createdAt }).from(productStockMovements).innerJoin(inventoryProducts, eq(productStockMovements.productId, inventoryProducts.id)).innerJoin(users, eq(productStockMovements.createdBy, users.id)).where(and(eq(productStockMovements.ownerId, ownerId), eq(inventoryProducts.ownerId, ownerId))).orderBy(desc(productStockMovements.createdAt)).limit(50);
 }
 
 export async function getProductInventorySummary(ownerId: number) {

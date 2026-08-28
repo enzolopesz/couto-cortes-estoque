@@ -213,3 +213,17 @@
 - [x] Tornar a produção multi-material atômica, baixando todos os materiais e registrando o histórico
 - [x] Preservar conversões, isolamento, catálogo público e não alterar saldos durante testes
 - [x] Atualizar testes, documentação, responsividade e validação técnica; executar build final e salvar checkpoint
+
+## Ajuste: estoque de produtos prontos
+
+- [x] Renomear o botão e modal de estoque para Ajustar estoque
+- [x] Registrar histórico de ajuste manual com saldo anterior, novo saldo, delta, usuário e data/hora
+- [x] Criar modal separado de Registrar saída com produto somente leitura, quantidade, motivo e observação
+- [x] Validar saída inteira, positiva e limitada ao estoque disponível
+- [x] Baixar produto pronto por delta em transação e registrar histórico sem alterar filamentos
+- [x] Preservar produção e ficha técnica sem mudanças de lógica
+- [x] Atualizar testes, documentação, responsividade e validação técnica; salvar checkpoint
+- [x] Validar visualmente Ajustar estoque e Registrar saída em desktop e mobile, incluindo prévia e ausência de overflow
+- [x] Invalidar também products.summary após ajuste manual de estoque
+- [x] Capturar o modal Ajustar estoque em desktop e mobile no estado final
+- [x] Reexecutar validações finais e salvar checkpoint desta etapa

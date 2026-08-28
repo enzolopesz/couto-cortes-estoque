@@ -101,3 +101,10 @@ O cadastro de produtos internos agora aceita estoque inicial e estoque mínimo e
 A composição é persistida na tabela relacional `product_materials`, com `product_id`, `filament_id`, `quantity_base` e `unit_type`. Pesos informados em quilogramas são convertidos para gramas antes da gravação; comprimentos permanecem em metros e quantidades em unidades. Criar ou editar um produto apenas grava a ficha técnica e não altera saldos de filamentos. O fluxo de produção consome automaticamente todas as linhas da ficha técnica, sem permitir informar material, consumo ou unidade manualmente. A produção multi-material valida todos os saldos antes de qualquer escrita e usa uma única transação para baixar materiais, registrar os históricos e aumentar o produto pronto.
 
 A migração `drizzle/0008_cultured_scourge.sql` cria a tabela sem remover ou alterar dados existentes. A API protegida valida o proprietário do produto e de cada filamento antes de salvar a composição, substitui todas as linhas em uma edição e remove as linhas relacionadas antes da exclusão do produto interno.
+
+
+## Ajuste manual e saída de produtos prontos
+
+O estoque de produtos prontos agora separa três operações. **Ajustar estoque** permite corrigir diretamente a quantidade disponível e o estoque mínimo, mas toda mudança de quantidade é registrada como ajuste manual com saldo anterior, saldo novo, diferença, usuário e data/hora. **Registrar saída** é uma operação distinta: aceita somente produto, quantidade inteira positiva, motivo (Venda, Entrega, Uso interno, Ajuste ou Outro) e observação opcional. A prévia mostra estoque atual, saída e saldo após a operação.
+
+A tabela `product_stock_movements` armazena o histórico auditável com `previous_quantity`, `quantity_delta`, `resulting_quantity`, `type`, `reason`, `notes`, `created_by` e `created_at`. Ajustes e saídas usam atualização otimista dentro de uma transação; uma saída acima do saldo disponível é rejeitada antes de qualquer escrita. A saída altera somente `product_inventory`, não baixa filamentos e não modifica a ficha técnica. O fluxo de produção continua separado e inalterado.
