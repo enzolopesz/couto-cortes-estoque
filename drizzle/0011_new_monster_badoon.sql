@@ -1,0 +1,1 @@
+ALTER TABLE `production_records` ADD `production_event_id` varchar(36);

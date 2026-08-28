@@ -18,6 +18,14 @@ export type ProductInput = {
   materials?: ProductMaterialInput[];
 };
 
+export function assertUniqueProductMaterials(materials: ProductMaterialInput[]) {
+  const seen = new Set<number>();
+  for (const material of materials) {
+    if (seen.has(material.filamentId)) throw new Error("Cada filamento pode aparecer somente uma vez na ficha técnica");
+    seen.add(material.filamentId);
+  }
+}
+
 export function compatibleProductMaterialUnits(baseUnit: "weight" | "unit" | "length"): MaterialUnit[] {
   return baseUnit === "weight" ? ["g", "kg"] : baseUnit === "length" ? ["m"] : ["unit"];
 }
@@ -33,6 +41,7 @@ export function convertProductMaterialToBase(quantity: number, unit: MaterialUni
 async function normalizeProductMaterials(tx: any, ownerId: number, materials: ProductMaterialInput[] | undefined) {
   if (materials === undefined) return undefined;
   const normalized: Array<{ ownerId: number; productId: string; filamentId: number; quantityBase: number; unitType: "g" | "m" | "unit" }> = [];
+  assertUniqueProductMaterials(materials);
   for (const material of materials) {
     const [filament] = await tx.select().from(filaments).where(and(eq(filaments.id, material.filamentId), eq(filaments.ownerId, ownerId))).limit(1);
     if (!filament || filament.ownerId !== ownerId) throw new Error("Um dos filamentos selecionados não pertence ao proprietário atual");
@@ -191,10 +200,33 @@ export async function getProductInventorySummary(ownerId: number) {
   return { productCount: Number(summary?.productCount ?? 0), totalAvailable: Number(summary?.totalAvailable ?? 0), lowStockCount: Number(summary?.lowStockCount ?? 0) };
 }
 
+export function groupProductionRows(rows: Array<{ id: string; productionEventId: string | null; productId: string; productName: string; filamentId: number; filamentBrand: string; filamentMaterial: string; filamentColor: string; quantityProduced: number; quantityPerUnit: string | number; unitUsed: string; totalConsumedBase: string | number; notes: string | null; userName: string | null; createdAt: Date }>) {
+  const groups = new Map<string, { id: string; productId: string; productName: string; quantityProduced: number; materialCount: number; materials: Array<{ filamentId: number; name: string; quantityPerUnit: number; totalConsumedBase: number; unit: string }>; notes: string | null; userName: string | null; createdAt: Date }>();
+  for (const row of rows) {
+    const legacyKey = `${row.productId}|${row.quantityProduced}|${new Date(row.createdAt).toISOString()}|${row.notes ?? ""}`;
+    const key = row.productionEventId ?? legacyKey;
+    const group = groups.get(key) ?? { id: key, productId: row.productId, productName: row.productName, quantityProduced: Number(row.quantityProduced), materialCount: 0, materials: [], notes: row.notes, userName: row.userName, createdAt: row.createdAt };
+    group.materials.push({ filamentId: row.filamentId, name: `${row.filamentBrand} · ${row.filamentMaterial} · ${row.filamentColor}`, quantityPerUnit: Number(row.quantityPerUnit), totalConsumedBase: Number(row.totalConsumedBase), unit: row.unitUsed });
+    group.materialCount = group.materials.length;
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
+}
+
 export async function listProductionRecords(ownerId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
-  return db.select({ id: productionRecords.id, productId: inventoryProducts.id, productName: inventoryProducts.name, filamentId: filaments.id, filamentMaterial: filaments.material, filamentColor: filaments.color, quantityProduced: productionRecords.quantityProduced, quantityPerUnit: productionRecords.quantityPerUnit, unitUsed: productionRecords.unitUsed, totalConsumedBase: productionRecords.totalConsumedBase, notes: productionRecords.notes, userName: users.name, createdAt: productionRecords.createdAt }).from(productionRecords).innerJoin(inventoryProducts, eq(productionRecords.productId, inventoryProducts.id)).innerJoin(filaments, eq(productionRecords.filamentId, filaments.id)).innerJoin(users, eq(productionRecords.createdBy, users.id)).where(eq(productionRecords.ownerId, ownerId)).orderBy(desc(productionRecords.createdAt)).limit(10);
+  const rows = await db.select({ id: productionRecords.id, productionEventId: productionRecords.productionEventId, productId: inventoryProducts.id, productName: inventoryProducts.name, filamentId: filaments.id, filamentBrand: filaments.brand, filamentMaterial: filaments.material, filamentColor: filaments.color, quantityProduced: productionRecords.quantityProduced, quantityPerUnit: productionRecords.quantityPerUnit, unitUsed: productionRecords.unitUsed, totalConsumedBase: productionRecords.totalConsumedBase, notes: productionRecords.notes, userName: users.name, createdAt: productionRecords.createdAt }).from(productionRecords).innerJoin(inventoryProducts, eq(productionRecords.productId, inventoryProducts.id)).innerJoin(filaments, eq(productionRecords.filamentId, filaments.id)).innerJoin(users, eq(productionRecords.createdBy, users.id)).where(eq(productionRecords.ownerId, ownerId)).orderBy(desc(productionRecords.createdAt)).limit(100);
+  const groups = new Map<string, { id: string; productId: string; productName: string; quantityProduced: number; materialCount: number; materials: Array<{ filamentId: number; name: string; quantityPerUnit: number; totalConsumedBase: number; unit: string }>; notes: string | null; userName: string | null; createdAt: Date }>();
+  for (const row of rows) {
+    const legacyKey = `${row.productId}|${row.quantityProduced}|${new Date(row.createdAt).toISOString()}|${row.notes ?? ""}`;
+    const key = row.productionEventId ?? legacyKey;
+    const group = groups.get(key) ?? { id: key, productId: row.productId, productName: row.productName, quantityProduced: Number(row.quantityProduced), materialCount: 0, materials: [], notes: row.notes, userName: row.userName, createdAt: row.createdAt };
+    group.materials.push({ filamentId: row.filamentId, name: `${row.filamentBrand} · ${row.filamentMaterial} · ${row.filamentColor}`, quantityPerUnit: Number(row.quantityPerUnit), totalConsumedBase: Number(row.totalConsumedBase), unit: row.unitUsed });
+    group.materialCount = group.materials.length;
+    groups.set(key, group);
+  }
+  return Array.from(groups.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
 }
 
 export function affectedRowsOf(result: unknown) {
@@ -211,7 +243,7 @@ export async function createProduction(input: { ownerId: number; createdBy: numb
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
   return db.transaction(async tx => {
-    const [product] = await tx.select({ id: inventoryProducts.id, ownerId: inventoryProducts.ownerId }).from(inventoryProducts).where(and(eq(inventoryProducts.id, input.productId), eq(inventoryProducts.ownerId, input.ownerId), eq(inventoryProducts.active, 1))).limit(1);
+    const [product] = await tx.select({ id: inventoryProducts.id, name: inventoryProducts.name, ownerId: inventoryProducts.ownerId }).from(inventoryProducts).where(and(eq(inventoryProducts.id, input.productId), eq(inventoryProducts.ownerId, input.ownerId), eq(inventoryProducts.active, 1))).limit(1);
     if (!product || product.ownerId !== input.ownerId) throw new Error("Produto interno não encontrado ou inativo");
     const [inventory] = await tx.select().from(productInventory).where(and(eq(productInventory.productId, input.productId), eq(productInventory.ownerId, input.ownerId))).limit(1);
     if (!inventory || inventory.ownerId !== input.ownerId) throw new Error("Estoque do produto não encontrado");
@@ -223,6 +255,7 @@ export async function createProduction(input: { ownerId: number; createdBy: numb
       materials.push({ filamentId: filament.id, filamentBrand: filament.brand, filamentMaterial: filament.material, filamentColor: filament.color, baseUnit: filament.baseUnit, currentWeight: filament.currentWeight, status: filament.status, quantityBase: bomRow.quantityBase, unitType: bomRow.unitType });
     }
     if (!materials.length) throw new Error("O produto não possui materiais cadastrados na ficha técnica");
+    const productionEventId = randomUUID();
     const calculations = materials.map(material => {
       const perUnitBase = Number(material.quantityBase);
       const totalConsumedBase = perUnitBase * input.quantityProduced;
@@ -237,8 +270,8 @@ export async function createProduction(input: { ownerId: number; createdBy: numb
       const affectedRows = Number((filamentUpdate as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0);
       if (affectedRows !== 1) throw new Error(`O saldo de ${material.filamentMaterial} foi alterado por outra operação. Atualize e tente novamente`);
       const unitUsed = material.unitType as "g" | "m" | "unit";
-      await tx.insert(stockMovements).values({ id: randomUUID(), filamentId: material.filamentId, type: "consumption", quantityGrams: material.baseUnit === "weight" ? material.totalConsumedBase.toFixed(2) : "0", previousWeightGrams: material.baseUnit === "weight" ? Number(material.currentWeight).toFixed(2) : "0", resultingWeightGrams: material.baseUnit === "weight" ? material.resulting.toFixed(2) : "0", inputUnit: unitUsed, inputQuantity: material.totalConsumedBase.toFixed(3), quantityBase: material.totalConsumedBase.toFixed(material.baseUnit === "unit" ? 0 : 2), previousBalance: Number(material.currentWeight).toFixed(material.baseUnit === "unit" ? 0 : 2), resultingBalance: material.resulting.toFixed(material.baseUnit === "unit" ? 0 : 2), description: `Produção de ${input.quantityProduced} unidade(s) de ${product.id}`, createdBy: input.createdBy });
-      await tx.insert(productionRecords).values({ id: randomUUID(), ownerId: input.ownerId, productId: input.productId, filamentId: material.filamentId, quantityProduced: input.quantityProduced, quantityPerUnit: material.perUnitBase.toFixed(3), unitUsed, totalConsumedBase: material.totalConsumedBase.toFixed(2), notes: input.notes?.trim() || null, createdBy: input.createdBy });
+      await tx.insert(stockMovements).values({ id: randomUUID(), filamentId: material.filamentId, type: "consumption", quantityGrams: material.baseUnit === "weight" ? material.totalConsumedBase.toFixed(2) : "0", previousWeightGrams: material.baseUnit === "weight" ? Number(material.currentWeight).toFixed(2) : "0", resultingWeightGrams: material.baseUnit === "weight" ? material.resulting.toFixed(2) : "0", inputUnit: unitUsed, inputQuantity: material.totalConsumedBase.toFixed(3), quantityBase: material.totalConsumedBase.toFixed(material.baseUnit === "unit" ? 0 : 2), previousBalance: Number(material.currentWeight).toFixed(material.baseUnit === "unit" ? 0 : 2), resultingBalance: material.resulting.toFixed(material.baseUnit === "unit" ? 0 : 2), description: `Produção de ${input.quantityProduced} un · ${product.name}`, createdBy: input.createdBy });
+      await tx.insert(productionRecords).values({ id: randomUUID(), ownerId: input.ownerId, productId: input.productId, filamentId: material.filamentId, productionEventId, quantityProduced: input.quantityProduced, quantityPerUnit: material.perUnitBase.toFixed(3), unitUsed, totalConsumedBase: material.totalConsumedBase.toFixed(2), notes: input.notes?.trim() || null, createdBy: input.createdBy });
     }
     const nextProductQuantity = Number(inventory.quantityAvailable) + input.quantityProduced;
     const productUpdate = await tx.update(productInventory).set({ quantityAvailable: nextProductQuantity, updatedAt: new Date() }).where(and(eq(productInventory.productId, input.productId), eq(productInventory.ownerId, input.ownerId), eq(productInventory.quantityAvailable, inventory.quantityAvailable)));

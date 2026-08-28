@@ -1,0 +1,1 @@
+ALTER TABLE `product_materials` ADD CONSTRAINT `product_materials_product_filament_unique` UNIQUE(`product_id`,`filament_id`);

@@ -1,4 +1,4 @@
-import { decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { decimal, int, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -96,7 +96,9 @@ export const productMaterials = mysqlTable("product_materials", {
   unitType: mysqlEnum("unit_type", ["g", "m", "unit"]).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
+}, table => ({
+  productFilamentUnique: uniqueIndex("product_materials_product_filament_unique").on(table.productId, table.filamentId),
+}));
 
 export type ProductMaterial = typeof productMaterials.$inferSelect;
 export type InsertProductMaterial = typeof productMaterials.$inferInsert;
@@ -135,6 +137,7 @@ export const productionRecords = mysqlTable("production_records", {
   ownerId: int("owner_id").notNull().references(() => users.id),
   productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
   filamentId: int("filament_id").notNull().references(() => filaments.id),
+  productionEventId: varchar("production_event_id", { length: 36 }),
   quantityProduced: int("quantity_produced").notNull(),
   quantityPerUnit: decimal("quantity_per_unit", { precision: 12, scale: 3 }).notNull(),
   unitUsed: varchar("unit_used", { length: 12 }).notNull(),

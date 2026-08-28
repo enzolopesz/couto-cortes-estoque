@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { assertSingleRowAffected, createInventoryProduct, createProductStockOut, createProduction, deleteInventoryProduct, listInventoryProducts, updateInventoryProduct, updateProductInventory } from "./products";
+import { assertSingleRowAffected, assertUniqueProductMaterials, createInventoryProduct, createProductStockOut, createProduction, deleteInventoryProduct, groupProductionRows, listInventoryProducts, updateInventoryProduct, updateProductInventory } from "./products";
 import { inventoryProducts, productInventory } from "../drizzle/schema";
 import { resetDbForTests, setDbForTests } from "./db";
 import type { TrpcContext } from "./_core/context";
@@ -230,5 +230,26 @@ describe("finished product stock movements", () => {
     await expect(createProductStockOut({ ownerId: 9, createdBy: 9, productId: "product-22", quantity: 3, reason: "sale" })).rejects.toThrow("disponível 2 un");
     expect(operations).toEqual([]);
     resetDbForTests();
+  });
+});
+
+
+describe("inventory presentation safeguards", () => {
+  it("rejects duplicated filament ids in a product BOM", () => {
+    expect(() => assertUniqueProductMaterials([
+      { filamentId: 3, quantity: 120, unit: "g" },
+      { filamentId: 3, quantity: 50, unit: "g" },
+    ])).toThrow("Cada filamento pode aparecer somente uma vez");
+  });
+
+  it("groups one production event while preserving material units", () => {
+    const createdAt = new Date("2026-08-28T00:00:00Z");
+    const grouped = groupProductionRows([
+      { id: "record-1", productionEventId: "event-1", productId: "product-1", productName: "Suporte", filamentId: 3, filamentBrand: "Voolt3D", filamentMaterial: "PLA", filamentColor: "Preto", quantityProduced: 5, quantityPerUnit: "120.000", unitUsed: "g", totalConsumedBase: "600.00", notes: null, userName: "Gestor", createdAt },
+      { id: "record-2", productionEventId: "event-1", productId: "product-1", productName: "Suporte", filamentId: 4, filamentBrand: "Voolt3D", filamentMaterial: "TPU", filamentColor: "Vermelho", quantityProduced: 5, quantityPerUnit: "2.000", unitUsed: "m", totalConsumedBase: "10.00", notes: null, userName: "Gestor", createdAt },
+    ]);
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].materialCount).toBe(2);
+    expect(grouped[0].materials.map(material => material.unit)).toEqual(["g", "m"]);
   });
 });

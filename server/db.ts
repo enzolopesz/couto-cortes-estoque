@@ -1,7 +1,7 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { drizzle } from "drizzle-orm/mysql2";
-import { filaments, InsertFilament, InsertUser, users, User, stockMovements } from "../drizzle/schema";
+import { filaments, InsertFilament, InsertUser, users, User, stockMovements, inventoryProducts, productStockMovements } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -190,6 +190,17 @@ export async function listStockMovementsByOwner(ownerId: number) {
   }));
 }
 
+export async function listAllInventoryMovementsByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  const filamentRows = await listStockMovementsByOwner(ownerId);
+  const productRows = await db.select({ id: productStockMovements.id, productId: inventoryProducts.id, productName: inventoryProducts.name, type: productStockMovements.type, previousQuantity: productStockMovements.previousQuantity, quantityDelta: productStockMovements.quantityDelta, resultingQuantity: productStockMovements.resultingQuantity, reason: productStockMovements.reason, notes: productStockMovements.notes, userName: users.name, userEmail: users.email, createdAt: productStockMovements.createdAt }).from(productStockMovements).innerJoin(inventoryProducts, eq(productStockMovements.productId, inventoryProducts.id)).innerJoin(users, eq(productStockMovements.createdBy, users.id)).where(and(eq(productStockMovements.ownerId, ownerId), eq(inventoryProducts.ownerId, ownerId))).orderBy(desc(productStockMovements.createdAt));
+  return [
+    ...filamentRows.map(row => ({ entityType: "filament" as const, entityId: String(row.filamentId), entityName: `${row.filamentBrand} · ${row.filamentMaterial}`, reason: null, notes: null, ...row })),
+    ...productRows.map(row => ({ entityType: "product" as const, entityId: row.productId, entityName: row.productName, id: row.id, productId: row.productId, productName: row.productName, filamentId: null, filamentMaterial: "", filamentColor: "PRODUTO PRONTO", filamentBrand: row.productName, type: row.type === "out" ? "product_out" as const : "product_adjustment" as const, quantityGrams: "0", previousWeightGrams: "0", resultingWeightGrams: "0", resultingBalance: row.resultingQuantity, inputUnit: "unit" as const, inputQuantity: Math.abs(Number(row.quantityDelta)), quantityBase: Math.abs(Number(row.quantityDelta)), previousBalance: row.previousQuantity, baseUnit: "unit" as const, weightPerUnit: null, description: row.notes, createdBy: null, userName: row.userName, userEmail: row.userEmail, createdAt: row.createdAt, reason: row.reason, notes: row.notes })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export type MovementType = "entry" | "consumption" | "loss" | "adjustment" | "reservation" | "release_reservation";
 export type BaseUnit = "weight" | "unit" | "length";
 export type InputUnit = "g" | "kg" | "roll" | "unit" | "m";
@@ -304,6 +315,7 @@ export async function getInventorySummary(ownerId: number) {
     .select({
       filamentCount: count(filaments.id),
       totalWeight: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.baseUnit} = 'weight' THEN ${filaments.currentWeight} ELSE 0 END), 0)`,
+      totalLength: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.baseUnit} = 'length' THEN ${filaments.currentWeight} ELSE 0 END), 0)`,
       totalUnits: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.baseUnit} = 'unit' THEN ${filaments.currentWeight} ELSE 0 END), 0)`,
       lowStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${filaments.currentWeight} <= ${filaments.minimumWeight} THEN 1 ELSE 0 END), 0)`,
     })
@@ -313,6 +325,7 @@ export async function getInventorySummary(ownerId: number) {
   return {
     filamentCount: Number(summary?.filamentCount ?? 0),
     totalWeight: Number(summary?.totalWeight ?? 0),
+    totalLength: Number(summary?.totalLength ?? 0),
     totalUnits: Number(summary?.totalUnits ?? 0),
     lowStockCount: Number(summary?.lowStockCount ?? 0),
   };

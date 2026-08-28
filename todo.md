@@ -227,3 +227,18 @@
 - [x] Invalidar também products.summary após ajuste manual de estoque
 - [x] Capturar o modal Ajustar estoque em desktop e mobile no estado final
 - [x] Reexecutar validações finais e salvar checkpoint desta etapa
+
+## Passe de correções e acabamento do módulo de estoque
+
+- [x] Corrigir overflow horizontal do modal Novo produto interno e reorganizar linhas de materiais
+- [x] Impedir materiais duplicados na ficha técnica no frontend, backend e banco
+- [x] Exibir indicador visual neutro ou correspondente à cor cadastrada do filamento
+- [x] Renomear somente o botão visual para Estoque, mantendo o modal Ajustar estoque
+- [x] Remover UUIDs das descrições amigáveis de movimentações
+- [x] Centralizar saídas de produtos prontos no histórico geral de Movimentações
+- [x] Agrupar produções recentes por evento e manter detalhes de materiais rastreáveis
+- [x] Corrigir unidades, formatação e alertas de estoque baixo nas telas
+- [x] Separar grandezas incompatíveis no card Saldo controlado do dashboard
+- [x] Melhorar a prévia de insuficiência sem alterar o bloqueio existente
+- [x] Preservar dados, históricos, ficha técnica, produção e conversões; não criar dados artificiais
+- [x] Executar regressões, validação visual e salvar checkpoint final

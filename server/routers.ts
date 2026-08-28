@@ -13,6 +13,7 @@ import {
   listFilamentsByOwner,
   updateFilament,
   listStockMovementsByOwner,
+  listAllInventoryMovementsByOwner,
   createStockMovement,
 } from "./db";
 import type { Filament } from "../drizzle/schema";
@@ -129,7 +130,7 @@ const productionInput = z.object({
 });
 
 const movementRouter = router({
-  list: protectedProcedure.query(({ ctx }) => listStockMovementsByOwner(ctx.user.id)),
+  list: protectedProcedure.query(({ ctx }) => listAllInventoryMovementsByOwner(ctx.user.id)),
   create: protectedProcedure.input(movementInput).mutation(async ({ ctx, input }) => {
     try {
       return await createStockMovement({ ...input, ownerId: ctx.user.id, createdBy: ctx.user.id });

@@ -71,6 +71,20 @@
       "when": 1787874926463,
       "tag": "0009_redundant_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787876174796,
+      "tag": "0010_tidy_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787876301590,
+      "tag": "0011_new_monster_badoon",
+      "breakpoints": true
     }
   ]
 }
