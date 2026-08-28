@@ -76,3 +76,11 @@ export function normalizeTrackingPrinter(value: unknown): TrackingPrinter {
 export function normalizeTrackingPrinters(value: unknown): TrackingPrinter[] {
   return Array.isArray(value) ? value.map(normalizeTrackingPrinter).filter(printer => printer.id) : [];
 }
+
+export function getSelectableTrackingPrinters(value: unknown): TrackingPrinter[] {
+  return normalizeTrackingPrinters(value).filter(printer => printer.active && printer.status === "FREE");
+}
+
+export function getInitialTrackingProductId(search: string): string {
+  return new URLSearchParams(search).get("produto") ?? "";
+}

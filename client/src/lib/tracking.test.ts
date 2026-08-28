@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTrackingPrinters } from "./tracking";
+import { getInitialTrackingProductId, getSelectableTrackingPrinters, normalizeTrackingPrinters } from "./tracking";
 
 describe("tracking response normalization", () => {
   it("maps snake_case fields and nested active production to a stable camelCase shape", () => {
@@ -37,6 +37,19 @@ describe("tracking response normalization", () => {
     const [printer] = normalizeTrackingPrinters([{ id: "p-1", name: "Inválida", active: true, status: "PRODUCING", run: { id: "run-1", status: "RUNNING" } }]);
     expect(printer.status).toBe("PRODUCING");
     expect(printer.run?.startedAt).toBeNull();
+  });
+
+  it("returns only active and free printers as selectable", () => {
+    expect(getSelectableTrackingPrinters([
+      { id: "free", name: "Livre", active: true, status: "FREE", run: null },
+      { id: "running", name: "Produzindo", active: true, status: "PRODUCING", run: { id: "r-1", status: "RUNNING", startedAt: "2026-01-01T10:00:00.000Z" } },
+      { id: "inactive", name: "Inativa", active: false, status: "FREE", run: null },
+    ]).map(printer => printer.id)).toEqual(["free"]);
+  });
+
+  it("extracts the product id from the card query without inventing a fallback", () => {
+    expect(getInitialTrackingProductId("?produto=product-123")).toBe("product-123");
+    expect(getInitialTrackingProductId("")).toBe("");
   });
 
   it("returns an empty collection for null, undefined or non-array responses", () => {

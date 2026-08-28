@@ -276,3 +276,12 @@
 - [x] Cobrir estados sem impressoras, impressoras livres, produção sem produto/estimativa e histórico vazio
 - [x] Adicionar testes da normalização defensiva sem criar dados no banco
 - [x] Validar /estoque/acompanhamento, console, TypeScript e testes; salvar checkpoint da correção
+
+## Ajuste: Iniciar produção a partir do card
+
+- [x] Corrigir o layout das ações do card sem sobreposição ou overflow, com empilhamento adequado no mobile
+- [x] Passar automaticamente o produto do card para o modal de início e mantê-lo somente leitura nesse fluxo
+- [x] Exibir apenas impressoras ativas e livres, sem produção RUNNING, no seletor de início
+- [x] Preservar ficha técnica automática, reserva no início e aumento de produto somente na finalização
+- [x] Adicionar testes do fluxo de pré-seleção e filtros de impressoras sem criar dados reais
+- [x] Executar TypeScript, Vitest, build e validação visual desktop/mobile; salvar checkpoint
