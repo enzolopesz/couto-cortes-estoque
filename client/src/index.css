@@ -81,3 +81,54 @@
 }
 
 ::selection { background: rgba(22, 139, 255, 0.3); }
+
+/* Scrollbars: superfícies escuras e discretas, sem alterar o comportamento de rolagem. */
+:root,
+.dark {
+  scrollbar-color: #2a4668 #070d18;
+  scrollbar-width: thin;
+}
+
+* {
+  scrollbar-color: #2a4668 #070d18;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #070d18;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #070d18;
+  border-radius: 9999px;
+  background: #2a4668;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b6d9f;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not(.dark),
+  :root:not(.dark) * {
+    scrollbar-color: #91a8c2 #e8eef5;
+  }
+
+  :root:not(.dark) ::-webkit-scrollbar-track {
+    background: #e8eef5;
+  }
+
+  :root:not(.dark) ::-webkit-scrollbar-thumb {
+    border-color: #e8eef5;
+    background: #91a8c2;
+  }
+
+  :root:not(.dark) ::-webkit-scrollbar-thumb:hover {
+    background: #6f8eae;
+  }
+}

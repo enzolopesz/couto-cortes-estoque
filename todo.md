@@ -242,3 +242,12 @@
 - [x] Melhorar a prévia de insuficiência sem alterar o bloqueio existente
 - [x] Preservar dados, históricos, ficha técnica, produção e conversões; não criar dados artificiais
 - [x] Executar regressões, validação visual e salvar checkpoint final
+
+## Nova solicitação: scrollbar e upload de imagens de produtos
+
+- [x] Personalizar visualmente a scrollbar vertical global e áreas com overflow, com suporte Chromium e scrollbar-color/scrollbar-width
+- [x] Implementar upload real de imagens de Produtos prontos no cadastro e edição usando o storage existente
+- [x] Validar MIME, extensões aceitas, limite de 5 MB, preview, troca, remoção e estados de carregamento sem base64
+- [x] Exibir imagens enviadas nos cards sem alterar estoque, ficha técnica, produção ou movimentações
+- [x] Preservar URLs legadas de imagem e evitar referências quebradas durante edição/exclusão
+- [x] Executar testes, build e validação visual desktop/mobile; não criar dados artificiais; salvar checkpoint

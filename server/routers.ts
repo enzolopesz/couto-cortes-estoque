@@ -100,7 +100,7 @@ const productMaterialInput = z.object({
 const productInput = z.object({
   name: z.string().trim().min(1, "Informe o nome do produto").max(160),
   category: z.string().trim().max(120).optional().nullable(),
-  imageUrl: z.string().url("Informe uma URL válida").optional().nullable(),
+  imageUrl: z.string().trim().max(500).refine(value => value.startsWith("/manus-storage/") || value.startsWith("https://") || value.startsWith("http://"), "Informe uma URL de imagem válida").optional().nullable(),
   sku: z.string().trim().max(80).optional().nullable(),
   externalProductId: z.string().trim().max(120).optional().nullable(),
   active: z.boolean().default(true),
