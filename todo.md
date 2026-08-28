@@ -268,3 +268,11 @@
 - [x] Adicionar métricas de produção em andamento ao dashboard sem redesign geral
 - [x] Preservar produções antigas, saldos e dados existentes; não criar dados artificiais
 - [x] Executar migrações, testes, build e validação visual desktop/mobile; salvar checkpoint
+
+## Correção bloqueante: erro em Acompanhamento
+
+- [x] Normalizar impressoras/produções em camelCase, snake_case e relações opcionais antes da renderização
+- [x] Impedir cálculo de tempo quando startedAt/started_at não existir ou for inválido
+- [x] Cobrir estados sem impressoras, impressoras livres, produção sem produto/estimativa e histórico vazio
+- [x] Adicionar testes da normalização defensiva sem criar dados no banco
+- [x] Validar /estoque/acompanhamento, console, TypeScript e testes; salvar checkpoint da correção
