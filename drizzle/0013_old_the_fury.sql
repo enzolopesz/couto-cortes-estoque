@@ -1,0 +1,1 @@
+ALTER TABLE `product_stock_movements` MODIFY COLUMN `type` enum('adjustment','out','production') NOT NULL;

@@ -85,6 +85,20 @@
       "when": 1787876301590,
       "tag": "0011_new_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787878314109,
+      "tag": "0012_sloppy_lila_cheney",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787878412048,
+      "tag": "0013_old_the_fury",
+      "breakpoints": true
     }
   ]
 }

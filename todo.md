@@ -251,3 +251,20 @@
 - [x] Exibir imagens enviadas nos cards sem alterar estoque, ficha técnica, produção ou movimentações
 - [x] Preservar URLs legadas de imagem e evitar referências quebradas durante edição/exclusão
 - [x] Executar testes, build e validação visual desktop/mobile; não criar dados artificiais; salvar checkpoint
+
+## Nova etapa: acompanhamento de produção por impressora
+
+- [x] Criar cadastro protegido de impressoras com nome, modelo e status ativo/inativo
+- [x] Garantir uma única produção RUNNING por impressora e status livre/produzindo derivado
+- [x] Criar tela Acompanhamento com card por impressora, tempo decorrido e ações manuais
+- [x] Implementar início de produção com produto, quantidade, ficha técnica e estimativa
+- [x] Reservar materiais ao iniciar usando saldo disponível e transação atômica
+- [x] Impedir reservas parciais e condições de corrida no backend
+- [x] Implementar finalização proporcional à quantidade produzida, consumo, liberação e estoque acabado
+- [x] Implementar cancelamento com liberação integral das reservas sem consumo ou produção acabada
+- [x] Criar histórico de production runs com usuários, timestamps, duração e status
+- [x] Calcular estimativa pelas últimas cinco produções válidas por produto/impressora e fallback por produto
+- [x] Integrar movimentações de materiais e produtos ao production run sem expor IDs técnicos
+- [x] Adicionar métricas de produção em andamento ao dashboard sem redesign geral
+- [x] Preservar produções antigas, saldos e dados existentes; não criar dados artificiais
+- [x] Executar migrações, testes, build e validação visual desktop/mobile; salvar checkpoint

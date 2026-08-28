@@ -119,7 +119,7 @@ export const productStockMovements = mysqlTable("product_stock_movements", {
   id: varchar("id", { length: 36 }).primaryKey(),
   ownerId: int("owner_id").notNull().references(() => users.id),
   productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
-  type: mysqlEnum("type", ["adjustment", "out"]).notNull(),
+  type: mysqlEnum("type", ["adjustment", "out", "production"]).notNull(),
   previousQuantity: int("previous_quantity").notNull(),
   quantityDelta: int("quantity_delta").notNull(),
   resultingQuantity: int("resulting_quantity").notNull(),
@@ -149,3 +149,61 @@ export const productionRecords = mysqlTable("production_records", {
 
 export type ProductionRecord = typeof productionRecords.$inferSelect;
 export type InsertProductionRecord = typeof productionRecords.$inferInsert;
+
+export const printers = mysqlTable("printers", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  model: varchar("model", { length: 160 }),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Printer = typeof printers.$inferSelect;
+export type InsertPrinter = typeof printers.$inferInsert;
+
+export const productionRuns = mysqlTable("production_runs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  printerId: varchar("printer_id", { length: 36 }).notNull().references(() => printers.id),
+  productId: varchar("product_id", { length: 36 }).notNull().references(() => inventoryProducts.id),
+  plannedQuantity: int("planned_quantity").notNull(),
+  producedQuantity: int("produced_quantity").default(0).notNull(),
+  status: mysqlEnum("status", ["RUNNING", "FINISHED", "CANCELED", "FAILED"]).default("RUNNING").notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  startedBy: int("started_by").notNull().references(() => users.id),
+  finishedBy: int("finished_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProductionRun = typeof productionRuns.$inferSelect;
+export type InsertProductionRun = typeof productionRuns.$inferInsert;
+
+/** Unique row per printer with an active run; the unique key is the database guard against concurrent RUNNING records. */
+export const productionRunLocks = mysqlTable("production_run_locks", {
+  printerId: varchar("printer_id", { length: 36 }).primaryKey().references(() => printers.id),
+  runId: varchar("run_id", { length: 36 }).notNull().unique().references(() => productionRuns.id),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProductionRunLock = typeof productionRunLocks.$inferSelect;
+export type InsertProductionRunLock = typeof productionRunLocks.$inferInsert;
+
+export const productionRunMaterials = mysqlTable("production_run_materials", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  ownerId: int("owner_id").notNull().references(() => users.id),
+  runId: varchar("run_id", { length: 36 }).notNull().references(() => productionRuns.id),
+  filamentId: int("filament_id").notNull().references(() => filaments.id),
+  quantityPerUnitBase: decimal("quantity_per_unit_base", { precision: 12, scale: 3 }).notNull(),
+  reservedQuantityBase: decimal("reserved_quantity_base", { precision: 12, scale: 3 }).notNull(),
+  consumedQuantityBase: decimal("consumed_quantity_base", { precision: 12, scale: 3 }).default("0").notNull(),
+  unitType: mysqlEnum("unit_type", ["g", "m", "unit"]).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ProductionRunMaterial = typeof productionRunMaterials.$inferSelect;
+export type InsertProductionRunMaterial = typeof productionRunMaterials.$inferInsert;

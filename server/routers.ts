@@ -17,6 +17,7 @@ import {
   createStockMovement,
 } from "./db";
 import type { Filament } from "../drizzle/schema";
+import { printerRouter } from "./printerRouter";
 import { createInventoryProduct, createProduction, deleteInventoryProduct, getInventoryProduct, getProductInventorySummary, listInventoryProducts,   listProductionRecords,
   listProductMaterials,
   listProductStockMovements,
@@ -228,6 +229,7 @@ export const appRouter = router({
   filaments: filamentRouter,
   movements: movementRouter,
   products: productsRouter,
+  printers: printerRouter,
 });
 
 export type AppRouter = typeof appRouter;

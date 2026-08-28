@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Filaments from "./pages/Filaments";
 import Movements from "./pages/Movements";
 import Products from "./pages/Products";
+import Tracking from "./pages/Tracking";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 
@@ -24,6 +25,7 @@ function Router() {
     <Route path="/estoque/filamentos" component={() => <ProtectedAdmin><Filaments /></ProtectedAdmin>} />
       <Route path="/estoque/movimentacoes" component={() => <ProtectedAdmin><Movements /></ProtectedAdmin>} />
     <Route path="/estoque/produtos" component={() => <ProtectedAdmin><Products /></ProtectedAdmin>} />
+    <Route path="/estoque/acompanhamento" component={() => <ProtectedAdmin><Tracking /></ProtectedAdmin>} />
     <Route path="/404" component={NotFound} />
     <Route component={NotFound} />
   </Switch>;

@@ -4,7 +4,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarInset, Si
 import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { toast } from "sonner";
-import { Boxes, ChevronRight, LayoutDashboard, LogOut, PanelLeft, Settings2, Warehouse, Wrench } from "lucide-react";
+import { Boxes, ChevronRight, Factory, LayoutDashboard, LogOut, PanelLeft, Settings2, Warehouse, Wrench } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -16,6 +16,7 @@ const menuItems = [
   { icon: Boxes, label: "Filamentos", path: "/estoque/filamentos" },
   { icon: Wrench, label: "Movimentações", path: "/estoque/movimentacoes" },
   { icon: Warehouse, label: "Produtos prontos", path: "/estoque/produtos" },
+  { icon: Factory, label: "Acompanhamento", path: "/estoque/acompanhamento" },
   { icon: Settings2, label: "Configurações", path: "#configuracoes", soon: true },
 ];
 
